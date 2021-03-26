@@ -12,7 +12,7 @@ set CURRENT_DIR=%cd%
 cd "%SCRIPT_DIR%"
 
 rem Scene config file can be passed as first parameter.
-set SETTINGS=../share/config/vestec.json
+set SETTINGS=../share/config/volume-rendering-demo.json
 IF NOT "%1"=="" (
   SET SETTINGS=%1
   SHIFT
