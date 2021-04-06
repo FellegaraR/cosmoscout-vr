@@ -33,4 +33,4 @@ void executeParallel(size_t count, std::function<void(size_t)> const& f) {
   executeParallel(count, std::thread::hardware_concurrency(), f);
 }
 
-}
+} // namespace cs::utils

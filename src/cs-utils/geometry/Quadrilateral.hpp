@@ -7,9 +7,9 @@
 #ifndef CS_UTILS_GEOMETRY_QUADRILATERAL_HPP
 #define CS_UTILS_GEOMETRY_QUADRILATERAL_HPP
 
+#include "Triangle.hpp"
 #include <array>
 #include <glm/glm.hpp>
-#include "Triangle.hpp"
 
 namespace cs::utils::geom {
 

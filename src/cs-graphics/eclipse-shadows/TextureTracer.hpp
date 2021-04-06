@@ -11,8 +11,8 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <vector>
 #include <variant>
+#include <vector>
 
 namespace cs::graphics {
 

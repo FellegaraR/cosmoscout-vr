@@ -9,8 +9,8 @@
 
 #include "Photon.hpp"
 #include <array>
-#include <vector>
 #include <cstdint>
+#include <vector>
 
 namespace cs::graphics {
 double const SUN_RADIUS = 695'510'000.0; ///< m

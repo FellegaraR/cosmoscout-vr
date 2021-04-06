@@ -17,7 +17,8 @@ namespace cs::utils {
 
 /// Saves a gray scale image to .pgm file format.
 template <typename T, uint32_t Size = 8>
-void savePGM(std::vector<T> const& data, uint64_t width, uint64_t height, std::string_view fileName) {
+void savePGM(
+    std::vector<T> const& data, uint64_t width, uint64_t height, std::string_view fileName) {
   const uint32_t MAX_VALUE = (std::pow(2, Size) - 1);
 
   std::ostringstream oss;
@@ -44,7 +45,8 @@ const auto savePGM16 = savePGM<T, 16>;
 
 /// Saves RGM images to .ppm file format.
 template <typename T, uint32_t Size = 8>
-void savePPM(std::vector<T> const& data, uint64_t width, uint64_t height, std::string_view fileName) {
+void savePPM(
+    std::vector<T> const& data, uint64_t width, uint64_t height, std::string_view fileName) {
   const uint32_t MAX_VALUE = (std::pow(2, Size) - 1);
 
   std::ostringstream oss;

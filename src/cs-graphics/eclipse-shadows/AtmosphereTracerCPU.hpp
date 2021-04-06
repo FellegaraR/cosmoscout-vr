@@ -46,7 +46,8 @@ class PhotonTracer {
 
   double refractiveIndexAtAltitude(double altitude, uint64_t wavelength) noexcept;
 
-  double partialRefractiveIndex(double altitude, double altitudeDelta, uint64_t wavelength) noexcept;
+  double partialRefractiveIndex(
+      double altitude, double altitudeDelta, uint64_t wavelength) noexcept;
 
   void traceRay(Photon& photon) noexcept;
 
@@ -59,9 +60,9 @@ class PhotonTracer {
   void attenuateLight(Photon& photon, glm::dvec3 const& oldPosition) noexcept;
 
  private:
-  BodyWithAtmosphere  const& mBody;
-  glm::dvec3          const& mBodyPosition;
-  RefractiveIndexLUT  const& mRefractiveIndexes;
+  BodyWithAtmosphere const&  mBody;
+  glm::dvec3 const&          mBodyPosition;
+  RefractiveIndexLUT const&  mRefractiveIndexes;
   std::vector<double> const& mDensities;
 };
 
