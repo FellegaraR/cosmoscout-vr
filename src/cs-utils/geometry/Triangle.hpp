@@ -7,6 +7,8 @@
 #ifndef CS_UTILS_GEOMETRY_TRIANGLE_HPP
 #define CS_UTILS_GEOMETRY_TRIANGLE_HPP
 
+#include <array>
+
 namespace cs::utils::geom {
 
 template <int Size, typename T>
