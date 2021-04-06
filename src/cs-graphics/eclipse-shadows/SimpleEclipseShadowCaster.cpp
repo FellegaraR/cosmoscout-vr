@@ -64,7 +64,7 @@ cs::utils::Texture4f generateShadowTexture(Body const& body) {
     data[i] = texture.dataPtr()[i].r;
   }
   utils::savePGM16<float>(
-      data, TEX_WIDTH, TEX_HEIGHT, "eclipse_shadow_" + std::to_string(body.meanRadius));
+      data, TEX_WIDTH, TEX_HEIGHT, "simple_eclipse_shadow_" + std::to_string(body.meanRadius));
 
   return texture;
 }

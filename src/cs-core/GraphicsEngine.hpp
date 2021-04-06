@@ -48,6 +48,12 @@ class CS_CORE_EXPORT GraphicsEngine {
 
   std::map<std::string, graphics::EclipseShadowCaster*> const& getEclipseShadowCaster() const;
 
+  /// DOCTODO
+  void init();
+
+  /// Return true, when init() has been called before.
+  bool getIsInitialized() const;
+
   /// The light direction in world space.
   void update(glm::vec3 const& sunDirection);
 
@@ -59,6 +65,8 @@ class CS_CORE_EXPORT GraphicsEngine {
 
  private:
   void calculateCascades();
+
+  bool mIsInitialized = false;
 
   std::shared_ptr<core::Settings>               mSettings;
   std::shared_ptr<graphics::ShadowMap>          mShadowMap;

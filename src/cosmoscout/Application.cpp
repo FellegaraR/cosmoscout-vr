@@ -363,6 +363,13 @@ void Application::FrameUpdate() {
       Quit();
     }
 
+    try {
+      mGraphicsEngine->init();
+    } catch (std::runtime_error const& e) {
+      logger().error("Failed to initialize the GraphicsEngine: {}", e.what());
+      Quit();
+    }
+
     // Now that SPICE is loaded, we can connect several parts of the application together.
     connectSlots();
 

@@ -138,35 +138,6 @@ GraphicsEngine::GraphicsEngine(std::shared_ptr<core::Settings> settings)
       mToneMappingNode->setExposure(value);
     }
   });
-
-  for (const auto& [name, anchor] : mSettings->mAnchors) {
-
-    auto   radii      = mSettings->getAnchorRadii(name);
-    double meanRadius = (radii[0] + radii[1] + radii[2]) / 3;
-
-    if (anchor.atmosphere.has_value() && anchor.gravity.has_value() && anchor.orbit.has_value()) {
-
-      std::vector<graphics::AtmosphereLayer> layers(anchor.atmosphere->layers.size());
-      for (size_t i = 0; i < anchor.atmosphere->layers.size(); ++i) {
-        layers[i] = {anchor.atmosphere->layers[i].altitude,
-            anchor.atmosphere->layers[i].baseTemperature,
-            anchor.atmosphere->layers[i].temperatureLapseRate,
-            anchor.atmosphere->layers[i].baseDensity};
-      }
-
-      mEclipseShadowCaster.emplace(name,
-          new graphics::AtmosphereEclipseShadowCaster(graphics::BodyWithAtmosphere{*anchor.gravity,
-              meanRadius, {anchor.orbit->semiMajorAxisSun},
-              {anchor.atmosphere->seaLevelMolecularNumberDensity, anchor.atmosphere->molarMass,
-                  anchor.atmosphere->height, layers,
-                  {anchor.atmosphere->sellmeierCoefficients.a,
-                      anchor.atmosphere->sellmeierCoefficients.terms}}}));
-
-    } else if (anchor.orbit.has_value()) {
-      mEclipseShadowCaster.emplace(name, new graphics::SimpleEclipseShadowCaster(graphics::Body{
-                                             meanRadius, {anchor.orbit->semiMajorAxisSun}}));
-    }
-  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -188,6 +159,52 @@ void GraphicsEngine::registerCaster(graphics::ShadowCaster* caster) {
 
 void GraphicsEngine::unregisterCaster(graphics::ShadowCaster* caster) {
   mShadowMap->deregisterCaster(caster);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+void GraphicsEngine::init() {
+
+  if (!getIsInitialized()) {
+    for (const auto& [name, anchor] : mSettings->mAnchors) {
+
+      auto   radii      = mSettings->getAnchorRadii(name);
+      double meanRadius = (radii[0] + radii[1] + radii[2]) / 3.0;
+
+      if (anchor.atmosphere.has_value() && anchor.gravity.has_value() && anchor.orbit.has_value()) {
+
+        // std::vector<graphics::AtmosphereLayer> layers(anchor.atmosphere->layers.size());
+        // for (size_t i = 0; i < anchor.atmosphere->layers.size(); ++i) {
+        //   layers[i] = {anchor.atmosphere->layers[i].altitude,
+        //       anchor.atmosphere->layers[i].baseTemperature,
+        //       anchor.atmosphere->layers[i].temperatureLapseRate,
+        //       anchor.atmosphere->layers[i].baseDensity};
+        // }
+
+        // mEclipseShadowCaster.emplace(
+        //     name, new graphics::AtmosphereEclipseShadowCaster(graphics::BodyWithAtmosphere{
+        //               *anchor.gravity, meanRadius, {anchor.orbit->semiMajorAxisSun},
+        //               {anchor.atmosphere->seaLevelMolecularNumberDensity,
+        //                   anchor.atmosphere->molarMass, anchor.atmosphere->height, layers,
+        //                   {anchor.atmosphere->sellmeierCoefficients.a,
+        //                       anchor.atmosphere->sellmeierCoefficients.terms}}}));
+        mEclipseShadowCaster.emplace(name, new graphics::SimpleEclipseShadowCaster(graphics::Body{
+                                               meanRadius, {anchor.orbit->semiMajorAxisSun}}));
+
+      } else if (anchor.orbit.has_value()) {
+        mEclipseShadowCaster.emplace(name, new graphics::SimpleEclipseShadowCaster(graphics::Body{
+                                               meanRadius, {anchor.orbit->semiMajorAxisSun}}));
+      }
+    }
+
+    mIsInitialized = true;
+  }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+bool GraphicsEngine::getIsInitialized() const {
+  return mIsInitialized;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
