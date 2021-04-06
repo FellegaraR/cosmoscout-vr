@@ -15,6 +15,7 @@ rem Examples:                                                                   
 rem    make.bat                                                                                    #
 rem    make.bat -G "Visual Studio 15 Win64"                                                        #
 rem    make.bat -G "Visual Studio 16 2019" -A x64                                                  #
+rem    make.bat -GNinja -DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe                      #
 rem ---------------------------------------------------------------------------------------------- #
 
 rem create some required variables -----------------------------------------------------------------
@@ -25,12 +26,28 @@ IF NOT "%~1"=="" (
   SET CMAKE_FLAGS=%*
 )
 
-rem Check if ComoScout VR debug build is set with the environment variable
+rem Check if ComoScout VR Debug build is set with the environment variable
 IF "%COSMOSCOUT_DEBUG_BUILD%"=="true" (
   ECHO CosmoScout VR debug build is enabled!
-  set BUILD_TYPE=debug
+  set BUILD_TYPE=Debug
 ) else (
-  set BUILD_TYPE=release
+  set BUILD_TYPE=Release
+)
+
+rem Check if unity build is disabled with "set COSMOSCOUT_USE_UNITY_BUILD=false".
+IF "%COSMOSCOUT_USE_UNITY_BUILD%"=="false" (
+  echo Unity build is disabled!
+  set UNITY_BUILD=Off
+) else (
+  set UNITY_BUILD=On
+)
+
+rem Check if precompiled headers should not be used with "set COSMOSCOUT_USE_PCH=false".
+IF "%COSMOSCOUT_USE_PCH%"=="false" (
+  echo Precompiled headers are disabled!
+  set PRECOMPILED_HEADERS=Off
+) else (
+  set PRECOMPILED_HEADERS=On
 )
 
 rem This directory should contain the top-level CMakeLists.txt - it is assumed to reside in the same
@@ -41,13 +58,13 @@ rem Get the current directory - this is the default location for the build and i
 set CURRENT_DIR=%cd%
 
 rem The build directory.
-set BUILD_DIR=%CURRENT_DIR%\build\windows-%BUILD_TYPE%
+set BUILD_DIR=%CURRENT_DIR%/build/windows-%BUILD_TYPE%
 
 rem The install directory.
-set INSTALL_DIR=%CURRENT_DIR%\install\windows-%BUILD_TYPE%
+set INSTALL_DIR=%CURRENT_DIR%/install/windows-%BUILD_TYPE%
 
 rem This directory should be used as the install directory for make_externals.bat.
-set EXTERNALS_INSTALL_DIR=%CURRENT_DIR%\install\windows-externals-%BUILD_TYPE%
+set EXTERNALS_INSTALL_DIR=%CURRENT_DIR%/install/windows-externals-%BUILD_TYPE%
 
 rem create build directory if necessary -----------------------------------------------------------
 
@@ -58,10 +75,11 @@ if exist "%BUILD_DIR%" goto BUILD_DIR_CREATED
 rem configure, compile & install -------------------------------------------------------------------
 
 cd "%BUILD_DIR%"
-cmake %CMAKE_FLAGS% -DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%"^
+cmake %CMAKE_FLAGS% -DCMAKE_BUILD_TYPE=%BUILD_TYPE% -DCMAKE_INSTALL_PREFIX="%INSTALL_DIR%"^
+      -DCMAKE_UNITY_BUILD=%UNITY_BUILD% -DCOSMOSCOUT_USE_PRECOMPILED_HEADERS=%PRECOMPILED_HEADERS%^
       -DCOSMOSCOUT_EXTERNALS_DIR="%EXTERNALS_INSTALL_DIR%" "%CMAKE_DIR%"  || exit /b
 
-cmake --build . --config %BUILD_TYPE% --target install --parallel 8  || exit /b
+cmake --build . --config %BUILD_TYPE% --target install --parallel %NUMBER_OF_PROCESSORS% || exit /b
 
 rem Delete empty files installed by cmake
 robocopy "%INSTALL_DIR%\lib" "%INSTALL_DIR%\lib" /s /move || exit /b

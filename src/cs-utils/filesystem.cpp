@@ -31,17 +31,29 @@ void createDirectoryRecursively(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-std::set<std::string> listFiles(std::string const& directory) {
-  boost::filesystem::path               dir(directory);
-  boost::filesystem::directory_iterator end_iter;
-
+std::set<std::string> listFiles(std::string const& directory, std::regex const& regex) {
   std::set<std::string> result;
 
-  if (boost::filesystem::exists(dir) && boost::filesystem::is_directory(dir)) {
-    for (boost::filesystem::directory_iterator dir_iter(dir); dir_iter != end_iter; ++dir_iter) {
-      if (boost::filesystem::is_regular_file(dir_iter->status())) {
-        result.insert(boost::filesystem::path(*dir_iter).normalize().string());
-      }
+  for (auto& p : boost::filesystem::directory_iterator(directory)) {
+    auto path = p.path().generic_path();
+
+    if (std::regex_match(path.string(), regex) && boost::filesystem::is_regular_file(path)) {
+      result.insert(path.string());
+    }
+  }
+
+  return result;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+std::set<std::string> listDirs(std::string const& directory, std::regex const& regex) {
+  std::set<std::string> result;
+
+  for (auto& p : boost::filesystem::directory_iterator(directory)) {
+    auto path = p.path().generic_path();
+    if (std::regex_match(path.string(), regex) && boost::filesystem::is_directory(path)) {
+      result.insert(path.string());
     }
   }
 
@@ -66,6 +78,13 @@ std::string loadToString(std::string const& file) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
+void writeStringToFile(std::string const& filePath, std::string const& content) {
+  std::ofstream file(filePath, std::ofstream::out);
+  file << content;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
 void downloadFile(std::string const& url, std::string const& destination,
     std::function<void(double, double)> const& progressCallback) {
   createDirectoryRecursively(boost::filesystem::path(destination).parent_path());
@@ -81,10 +100,11 @@ void downloadFile(std::string const& url, std::string const& destination,
   request.setOpt(curlpp::options::NoSignal(true));
   request.setOpt(curlpp::options::NoProgress(false));
   request.setOpt(curlpp::options::SslVerifyPeer(false));
-  request.setOpt(curlpp::options::ProgressFunction([&](double a, double b, double c, double d) {
-    progressCallback(b, a);
-    return 0;
-  }));
+  request.setOpt(curlpp::options::ProgressFunction(
+      [&](double a, double b, double /*unused*/, double /*unused*/) {
+        progressCallback(b, a);
+        return 0;
+      }));
 
   request.perform();
 }

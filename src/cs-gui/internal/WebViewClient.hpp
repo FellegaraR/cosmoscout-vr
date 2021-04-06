@@ -16,11 +16,11 @@
 #include "RequestHandler.hpp"
 #include "ResourceRequestHandler.hpp"
 
-#include <any>
 #include <include/cef_client.h>
 #include <include/cef_render_handler.h>
 #include <include/cef_v8.h>
 #include <include/wrapper/cef_stream_resource_handler.h>
+#include <optional>
 #include <unordered_map>
 
 namespace cs::gui::detail {
@@ -29,12 +29,19 @@ namespace cs::gui::detail {
 class WebViewClient : public CefClient {
 
  public:
-  virtual ~WebViewClient();
+  WebViewClient() = default;
+  ~WebViewClient() override;
+
+  WebViewClient(WebViewClient const& other) = delete;
+  WebViewClient(WebViewClient&& other)      = delete;
+
+  WebViewClient& operator=(WebViewClient const& other) = delete;
+  WebViewClient& operator=(WebViewClient&& other) = delete;
 
   /// Registers callback functions for Javascript. Registering the same name twice will override the
   /// first callback.
   void RegisterJSCallback(
-      std::string const& name, std::function<void(std::vector<std::any> const&)> callback);
+      std::string const& name, std::function<void(std::vector<std::optional<JSType>>&&)> callback);
 
   /// Unregisters a JavaScript callback.
   void UnregisterJSCallback(std::string const& name);
@@ -95,7 +102,8 @@ class WebViewClient : public CefClient {
   CefRefPtr<LoadHandler>     mLoadHandler     = new LoadHandler();
   CefRefPtr<RequestHandler>  mRequestHandler  = new RequestHandler();
 
-  std::unordered_map<std::string, std::function<void(std::vector<std::any> const&)>> js_callbacks_;
+  std::unordered_map<std::string, std::function<void(std::vector<std::optional<JSType>>&&)>>
+      mJSCallbacks;
 };
 
 } // namespace cs::gui::detail

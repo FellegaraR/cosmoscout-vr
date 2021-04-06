@@ -11,10 +11,9 @@
 #include <VistaKernel/DisplayManager/VistaViewport.h>
 #include <VistaKernel/VistaSystem.h>
 
-#include <GL/glew.h>
-
-#include <chrono>
+#include <array>
 #include <iostream>
+#include <memory>
 
 namespace cs::utils {
 
@@ -90,63 +89,60 @@ std::string toString(char const* v) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 std::vector<std::string> splitString(std::string const& s, char delim) {
-  std::vector<std::string> elems;
+  size_t start = 0;
+  size_t end   = s.find_first_of(delim);
 
-  std::stringstream ss(s);
-  std::string       item;
+  std::vector<std::string> output;
 
-  while (std::getline(ss, item, delim)) {
-    elems.push_back(item);
+  while (end <= std::string::npos) {
+    output.emplace_back(s.substr(start, end - start));
+
+    if (end == std::string::npos) {
+      break;
+    }
+
+    start = end + 1;
+    end   = s.find_first_of(delim, start);
   }
 
-  return elems;
+  return output;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 float getCurrentFarClipDistance() {
-  double near, far;
+  double nearPlane{};
+  double farPlane{};
   GetVistaSystem()
       ->GetDisplayManager()
       ->GetCurrentRenderInfo()
       ->m_pViewport->GetProjection()
       ->GetProjectionProperties()
-      ->GetClippingRange(near, far);
-  return (float)far;
+      ->GetClippingRange(nearPlane, farPlane);
+  return static_cast<float>(farPlane);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-double measureTimeSeconds(std::function<void()> const& f) {
-  auto start = std::chrono::high_resolution_clock::now();
-  f();
-  auto end = std::chrono::high_resolution_clock::now();
-  return std::chrono::duration<double>(end - start).count();
-}
+#ifdef __linux__
+#define CS_POPEN popen
+#define CS_CLOSE pclose
+#else
+#define CS_POPEN _popen
+#define CS_CLOSE _pclose
+#endif
 
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-bool glDebugOnlyErrors = true;
-
-void GLAPIENTRY MessageCallback(GLenum source, GLenum type, GLuint id, GLenum severity,
-    GLsizei length, const GLchar* message, const void* userParam) {
-  if (type == GL_DEBUG_TYPE_ERROR)
-    fprintf(
-        stderr, "GL ERROR: type = 0x%x, severity = 0x%x, message = %s\n", type, severity, message);
-  else if (!glDebugOnlyErrors)
-    fprintf(stdout, "GL WARNING: type = 0x%x, severity = 0x%x, message = %s\n", type, severity,
-        message);
-}
-
-void CS_UTILS_EXPORT enableGLDebug(bool onlyErrors) {
-  glDebugOnlyErrors = onlyErrors;
-  glEnable(GL_DEBUG_OUTPUT);
-  glDebugMessageCallback(MessageCallback, nullptr);
-}
-
-void CS_UTILS_EXPORT disableGLDebug() {
-  glDisable(GL_DEBUG_OUTPUT);
-  glDebugMessageCallback(nullptr, nullptr);
+std::string exec(std::string const& cmd) {
+  std::array<char, 128>                      buffer{};
+  std::string                                result;
+  std::unique_ptr<FILE, decltype(&CS_CLOSE)> pipe(CS_POPEN(cmd.c_str(), "r"), CS_CLOSE);
+  if (!pipe) {
+    throw std::runtime_error("popen() failed!");
+  }
+  while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) != nullptr) {
+    result += buffer.data();
+  }
+  return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

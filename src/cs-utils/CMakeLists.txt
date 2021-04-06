@@ -32,13 +32,19 @@ target_link_libraries(cs-utils
     OpenSG::base
     OpenSG::system
     Tiff::Tiff
+    Tiff::Tiffxx
     ${VISTACORELIBS_LIBRARIES}
     ${CMAKE_DL_LIBS}
     cspice::cspice
     curl::curl
     curlpp::curlpp
     c-ares::c-ares
+    spdlog::spdlog
 )
+
+if(COSMOSCOUT_USE_PRECOMPILED_HEADERS)
+  target_precompile_headers(cs-utils PRIVATE precompiled.pch)
+endif()
 
 target_include_directories(cs-utils
   PUBLIC

@@ -23,22 +23,47 @@ In the following, the individual parameters are explained and the required steps
 ```javascript
 {
   "startDate": "today",
+  "resetDate": "today",
+  "minDate": "1950-01-02 00:00:00.000",
+  "maxDate": "2049-12-31 00:00:00.000",
+  "fileLogLevel": "debug",
+  "consoleLogLevel": "trace",
+  "screenLogLevel": "info",
   "observer": {
     "center": "Earth",
     "frame": "IAU_Earth",
-    "distance": 10000000.0,
-    "longitude": 11.281067,
-    "latitude": 48.086709
+    "position": [0, 0, 25000000],
+    "rotation": [0, 0, 0, 1]
   },
   "spiceKernel": "../share/config/spice/simple.txt",
   "widgetScale": 0.6,
   "enableMouseRay": false,
+  "sceneScale": {
+    "minScale": 1,
+    "maxScale": 100000000000000000,
+    "closeVisualDistance": 1.6,
+    "farVisualDistance": 0.7,
+    "closeRealDistance": 1.6,
+    "farRealDistance": 10000000,
+    "lockWeight": 0.1,
+    "trackWeight": 0.0002,
+    "minObjectSize": 10000.0,
+    "nearClip": 0.2,
+    "minFarClip": 200.0,
+    "maxFarClip": 20000.0
+  },
   "anchors": {},
+  "bookmarks": [],
   "plugins": {}
 }
 ```
 
-* **`"startDate"`:** This should be either `"today"` or in the format `"1950-01-02 00:00:00.000"` and determines the initial simulation time.
+* **`"startDate"`:** This should be either `"today"` or in the format `"1950-01-02 00:00:00.000"`. It determines the initial simulation time.
+* **`"resetDate"`:** This should be either `"today"` or in the format `"1950-01-02 00:00:00.000"`. The simulation time will be set to this value when the reset button is clicked.
+* **`"minDate"`:** This should be in the format `"1950-01-02 00:00:00.000"` and determines the left end of the timeline. You have to make sure that the loaded SPICE kernels are valid for this time range.
+* **`"maxDate"`:** This should be in the format `"2049-12-31 00:00:00.000"` and determines the right end of the timeline. You have to make sure that the loaded SPICE kernels are valid for this time range.
+* **`"fileLogLevel"`**, **`"consoleLogLevel"`** and **`"screenLogLevel"`:** Adjust the verbosity of the log output written to `cosmoscout.log`, written to the command line and written to the on-screen console respectively. Should be one of 
+`"trace"`, `"debug"`, `"info"`, `"warning"`, `"error"`, `"critical"` or `"off"`.
 * **`"observer"`:** Specifies the initial position of the virtual camera. `"center"` and `"frame"` define the initial SPICE reference frame; `"distance"` (in meters), `"longitude"` and `"latitude"` (in degree) the 3D-position inside this reference frame.
 For more background information on SPICE reference frames, you may read [this document](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/Tutorials/pdf/individual_docs/17_frames_and_coordinate_systems.pdf). 
 * **`spiceKernel`:** The path to the SPICE meta kernel. If you want to start experimenting with SPICE, you can read the [SPICE-kernels-required-reading document](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/kernel.html). 
@@ -46,19 +71,82 @@ However, the included [meta kernel](../config/base/spice/simple-linux.txt) conta
 * **`"widgetScale"`:** This factor specifies the initial scaling factor for world-space UI elements.
 You can modify this if in your screen setup the 3D-UI elements seem too large or too small.
 * **`"enableMouseRay"`:** In a virtual reality setup you want to set this to `true` as it will enable drawing of a ray emerging from your pointing device.
+* **`"sceneScale"`:**
+In order for the scientists to be able to interact with their environment, the next virtual celestial body must never be more than an arm’s length away.
+If the Solar System were always represented on a 1:1 scale, the virtual planetary surface would be too far away to work effectively with the simulation.<br>
+This JSON object controls how the virtual scene is scaled depending on the observer's position.
+This distance to the closest celestial body depends on the observer's *real* distance in outer space to the respective body.
+Take this as an example:
+  ```javascript
+  "sceneScale": {
+    "minScale": 1,
+    "maxScale": 100000000000000000,
+    "closeVisualDistance": 1.6,
+    "farVisualDistance": 0.7,
+    "closeRealDistance": 1.6,
+    "farRealDistance": 10000000,
+    "lockWeight": 0.1,
+    "trackWeight": 0.0002,
+    "minObjectSize": 10000.0,
+    "nearClip": 0.2,
+    "minFarClip": 200.0,
+    "maxFarClip": 20000.0
+  },
+  ```
+  If the observer is closer to a celestial body's surface than `closeRealDistance` (in meters), the scene will be shown in a 1:1 scale (that is 1:`minScale`) and the respective body will be rendered at a distance of `closeVisualDistance` (in meters).
+If the observer is farther away than `farRealDistance` (in meters) from any body, the scene will be shown in a 1:100000000000000000 scale (that is 1:`maxScale`) and the closest body will be rendered at a distance of `farVisualDistance` (in meters).<br>
+At any distance between `closeRealDistance` and `farRealDistance`, the values above will be linearly interpolated.<br>
+This JSON object also controls the automatic SPICE frame changes when the observer moves from body to body.
+The active body is determined by its weight which is calculated by its size and distance to the observer.
+When this weight exceeds `trackWeight`, the observer will follow the body's position.
+When this weight exceeds `lockWeight`, the observer will also follow the body's rotation.<br>
+Last but not least, the far clipping plane depends on the scene scale: Near clip will always be set to `nearClip` (in meters), while far clip will be interpolated between `minFarClip` and `maxFarClip` depending on the scene scale.
 * **`"anchors"`:** This item contains an object for each and every celestial anchor you are using later in the config. Take this as an example:
   ```javascript
   "anchors": {
     "Moon": {
       "center": "Moon",
       "frame": "IAU_Moon",
-      "startExistence": "1950-01-02 00:00:00.000",
-      "endExistence": "2049-12-31 00:00:00.000"
+      "existence": ["1950-01-02 00:00:00.000", "2049-12-31 00:00:00.000"],
+      "radii": [1000, 1000, 1000], // Optional, in meters. If not given, values from your SPICE kernels will be used
+      "position": [0, 0, 0],       // Optional, in meters. Relative to the SPICE reference frame above.
+      "rotation": [0, 0, 0, 1]     // Optional. Relative to the SPICE reference frame above.
+      "scale": 1                   // Optional. Scales around the "position".
+      "trackable": true            // Optional. If set to false, the observer will not try to follow CelestialBodies attached to this anchor.
     },
     ...
   }
   ```
-  Now if you want to attach a simple body or a trajectory to this anchor, the configuration of the respective plugins will only refer to `"Moon"`. `"center"` and `"frame"` define the SPICE reference frame, `"startExistence"` and `"endExistence"` should match the data coverage of your SPICE kernels.
+  Now if you want to attach a simple body or a trajectory to this anchor, the configuration of the respective plugins will only refer to `"Moon"`. The properties `"center"` and `"frame"` define the SPICE reference frame, `"existence"` should match at most the data coverage of your SPICE kernels. Keep in mind, that the dates are given UTC, your SPICE kernel's coverage is however most likely given in TDB which differs from UTC by several seconds.
+* **`"bookmarks"`:** This list may contain events which will be shown on the timeline and in the sidebar. Take this as an example:
+  ```javascript
+   "bookmarks": [
+    {
+      "name": "Mercury",
+      "icon": "mercury.png",
+      "location": {
+        "center": "Mercury",
+        "frame": "IAU_Mercury"
+      }
+    },
+    {
+      "name": "Apollo 17 Start",
+      "description": "Start of the Apollo 17 mission from the Kennedy Space Center.",
+      "color": [0.8, 0.8, 0.8],
+      "location": {
+        "center": "Earth",
+        "frame": "IAU_Earth",
+        "position": [-6717320.0, 3677613.0, 1137577.0],
+        "rotation": [0.154, 0.634, 0.182, -0.735]
+      },
+      "time": {
+        "start": "1972-12-07 05:33:57"
+      }
+    },
+    ...
+  ],
+  ```
+  Except for `"name"`, all properties are optional. You can supply a description, a color, a location (optionally with `position` and `rotation`) and a time.
 * **`"plugins"`:** This item contains an object for each plugin.
 The name of the object must match the library name of the plugin.
 In the example below, CosmoScout VR will attempt to load a plugin library called `../share/plugins/libcsp-simple-bodies.so` (`..\share\plugins\csp-simple-bodies.dll` on Windows). 

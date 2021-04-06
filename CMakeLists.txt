@@ -5,7 +5,7 @@
 # ------------------------------------------------------------------------------------------------ #
 
 cmake_minimum_required(VERSION 3.13)
-project(cosmoscout-vr VERSION 1.1.1)
+project(cosmoscout-vr VERSION 1.4.0)
 
 # Use cmake 3.12's <PACKAGE>_ROOT variabled for searching.
 cmake_policy(SET CMP0074 NEW)
@@ -16,10 +16,10 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
 # CMAKE_BUILD_TYPE must be set (except for Visual Studio).
 if(NOT MSVC)
   if(NOT CMAKE_BUILD_TYPE OR
-    (NOT ${CMAKE_BUILD_TYPE} STREQUAL "release" AND
-    NOT ${CMAKE_BUILD_TYPE} STREQUAL "debug"))
+    (NOT ${CMAKE_BUILD_TYPE} STREQUAL "Release" AND
+    NOT ${CMAKE_BUILD_TYPE} STREQUAL "Debug"))
 
-    set(CMAKE_BUILD_TYPE "release" CACHE STRING "release or debug" FORCE)
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Release or Debug" FORCE)
   endif()
 endif()
 
@@ -43,6 +43,9 @@ find_package(OpenGL REQUIRED)
 set(COSMOSCOUT_EXTERNALS_DIR COSMOSCOUT_EXTERNALS_DIR-NotFound 
   CACHE STRING "Directory where the externals got installed to.")
 
+# Make sure to use forward slashes only.
+file(TO_CMAKE_PATH ${COSMOSCOUT_EXTERNALS_DIR} COSMOSCOUT_EXTERNALS_DIR)
+
 if (DEFINED ENV{CARES_ROOT_DIR})
   SET(CARES_ROOT_DIR "$ENV{CARES_ROOT_DIR}")
 else()
@@ -59,6 +62,12 @@ if (DEFINED ENV{CURLPP_ROOT_DIR})
   SET(CURLPP_ROOT_DIR "$ENV{CURLPP_ROOT_DIR}")
 else()
   SET(CURLPP_ROOT_DIR ${COSMOSCOUT_EXTERNALS_DIR})
+endif()
+
+if (DEFINED ENV{SPDLOG_ROOT_DIR})
+  SET(SPDLOG_ROOT_DIR "$ENV{SPDLOG_ROOT_DIR}")
+else()
+  SET(SPDLOG_ROOT_DIR ${COSMOSCOUT_EXTERNALS_DIR})
 endif()
 
 if (DEFINED ENV{GLM_ROOT_DIR})
@@ -121,6 +130,12 @@ else()
   SET(OPENSG_ROOT_DIR ${COSMOSCOUT_EXTERNALS_DIR})
 endif()
 
+if (DEFINED ENV{CIVETWEB_ROOT_DIR})
+  SET(CIVETWEB_ROOT_DIR "$ENV{CIVETWEB_ROOT_DIR}")
+else()
+  SET(CIVETWEB_ROOT_DIR ${COSMOSCOUT_EXTERNALS_DIR})
+endif()
+
 if (DEFINED ENV{VISTA_CMAKE_CONFIG_DIR})
   SET(VistaCoreLibs_DIR "$ENV{VISTA_CMAKE_CONFIG_DIR}")
 else()
@@ -135,14 +150,21 @@ find_package(CSPICE REQUIRED)
 find_package(CARES REQUIRED)
 find_package(CURL REQUIRED)
 find_package(CURLPP REQUIRED)
+find_package(SPDLOG REQUIRED)
 find_package(CEF REQUIRED)
 find_package(TIFF REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(GLUT REQUIRED)
 find_package(OPENSG REQUIRED)
+find_package(CIVETWEB REQUIRED)
 find_package(VistaCoreLibs REQUIRED 
   COMPONENTS "VistaBase" "VistaKernel" "VistaKernelOpenSGExt" "VistaOGLExt"
 )
+
+# X11 is used on Linux to set the application window's name and icon.
+if (UNIX)
+  find_package(X11)
+endif()
 
 # install some files -------------------------------------------------------------------------------
 
@@ -154,18 +176,28 @@ install(
 )
 
 # Copy boost libraries to install directory.
-if (WIN32)
-  foreach(BOOST_LIB ${Boost_LIBRARIES})
-    if(EXISTS "${BOOST_LIB}")
-      get_filename_component(LIB_BASE_NAME ${BOOST_LIB} NAME_WE)
-      get_filename_component(LIB_PATH ${BOOST_LIB} PATH)
+foreach(BOOST_LIB 
+  ${Boost_CHRONO_LIBRARY_DEBUG}
+  ${Boost_CHRONO_LIBRARY_RELEASE}
+  ${Boost_DATE_TIME_LIBRARY_DEBUG}
+  ${Boost_DATE_TIME_LIBRARY_RELEASE}
+  ${Boost_FILESYSTEM_LIBRARY_RELEASE}
+  ${Boost_FILESYSTEM_LIBRARY_DEBUG}
+  ${Boost_SYSTEM_LIBRARY_RELEASE}
+  ${Boost_SYSTEM_LIBRARY_DEBUG}
+)
+  if(EXISTS "${BOOST_LIB}")
+    get_filename_component(LIB_BASE_NAME ${BOOST_LIB} NAME_WE)
+    get_filename_component(LIB_PATH ${BOOST_LIB} PATH)
+    if (WIN32)
       install(FILES ${LIB_PATH}/${LIB_BASE_NAME}.dll DESTINATION "lib")
     endif()
-  endforeach()
-endif()
-if (UNIX)
-  install(FILES ${Boost_LIBRARIES} DESTINATION "lib")
-endif()
+    if (UNIX)
+      file(GLOB LIB_FILES ${LIB_PATH}/${LIB_BASE_NAME}.so*)
+      install(FILES ${LIB_FILES} DESTINATION "lib")
+    endif()
+  endif()
+endforeach()
 
 # Install documentation directory
 install(DIRECTORY
@@ -219,12 +251,42 @@ add_definitions(
   -DGLM_ENABLE_EXPERIMENTAL
   -DGLM_FORCE_SWIZZLE
   -DNOMINMAX
+  -DSPDLOG_COMPILED_LIB
 )
 
-add_compile_options($<$<CXX_COMPILER_ID:MSVC>:/EHsc>)
+if (MSVC)
+  add_definitions(
+    # For whatever reason ViSTA checks for 'WIN32' instead of '_WIN32' in a lot of places, which
+    # results in Linux code being included on Windows.
+    -DWIN32
+  )
+
+  add_compile_options(
+    -experimental:external
+    -external:anglebrackets
+    -external:W0
+    -W3 -WX
+    -EHsc
+    -wd4251
+
+    # Warns about multiple inheritance problems, which we can't avoid inheriting from ViSTA classes.
+    -wd4250
+  )
+else()
+  add_compile_options(
+    -Wall
+    -Werror
+  )
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Enable unit tests
+option(COSMOSCOUT_UNIT_TESTS "Enable compilation of tests" OFF)
+if (NOT COSMOSCOUT_UNIT_TESTS)
+  add_definitions(-DDOCTEST_CONFIG_DISABLE)
+endif()
 
 # Enable code coverage measurements
 option(COSMOSCOUT_COVERAGE_INFO "Run code coverage analytics" OFF)

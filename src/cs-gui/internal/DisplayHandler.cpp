@@ -6,20 +6,48 @@
 
 #include "DisplayHandler.hpp"
 
-#include <iostream>
+#include "../logger.hpp"
 
 namespace cs::gui::detail {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-bool DisplayHandler::OnConsoleMessage(CefRefPtr<CefBrowser> browser, cef_log_severity_t level,
-    CefString const& message, CefString const& source, int line) {
+void DisplayHandler::SetCursorChangeCallback(CursorChangeCallback const& callback) {
+  mCursorChangeCallback = callback;
+}
 
-  std::string path(source.ToString());
-  int         pos((int)path.find_last_of("/\\"));
-  std::cout << "[" << path.substr(pos == std::string::npos ? 0 : pos + 1) << ":" << line << "] "
-            << message.ToString() << std::endl;
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+bool DisplayHandler::OnConsoleMessage(CefRefPtr<CefBrowser> /*browser*/, cef_log_severity_t level,
+    CefString const& message, CefString const& /*source*/, int /*line*/) {
+
+  if (level == LOGSEVERITY_VERBOSE) {
+    logger().trace(message.ToString());
+  } else if (level == LOGSEVERITY_DEBUG) {
+    logger().debug(message.ToString());
+  } else if (level == LOGSEVERITY_WARNING) {
+    logger().warn(message.ToString());
+  } else if (level == LOGSEVERITY_ERROR) {
+    logger().error(message.ToString());
+  } else if (level == LOGSEVERITY_FATAL) {
+    logger().critical(message.ToString());
+  } else {
+    logger().info(message.ToString());
+  }
+
   return true;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+bool DisplayHandler::OnCursorChange(CefRefPtr<CefBrowser> browser, CefCursorHandle cursor,
+    cef_cursor_type_t type, CefCursorInfo const& custom_cursor_info) {
+  if (mCursorChangeCallback) {
+    mCursorChangeCallback(static_cast<Cursor>(type));
+    return true;
+  }
+
+  return false;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

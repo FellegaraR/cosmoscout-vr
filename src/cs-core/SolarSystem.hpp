@@ -13,13 +13,10 @@
 #include "../cs-scene/CelestialBody.hpp"
 #include "../cs-scene/CelestialObserver.hpp"
 
+#include <chrono>
 #include <set>
 #include <unordered_set>
 #include <vector>
-
-namespace cs::utils {
-class FrameTimings;
-} // namespace cs::utils
 
 namespace cs::core {
 
@@ -35,30 +32,30 @@ class CS_CORE_EXPORT SolarSystem {
   /// The body which the observer is attached to. The observer will follow this bodies motions.
   utils::Property<std::shared_ptr<scene::CelestialBody>> pActiveBody;
 
-  /// The name of the current SPICE center of the observer. Should be the same as
-  /// pActiveBody.get()->getCenterName()
-  utils::Property<std::string> pObserverCenter;
-
-  /// The SPICE frame of reference the observer is currently in.
-  utils::Property<std::string> pObserverFrame;
-
   /// The current speed of the observer in m/s in relation to his current SPICE reference frame.
   utils::Property<float> pCurrentObserverSpeed;
 
   /// Luminous power of the sun (in lumens) scaled to match the current observer scale.
   /// In order to get an illuminance value i (in lux), calculate the distance to the sun
-  /// d = length(p-pSunPosition) and calculate then i = pSunLuminousPower / (d*d*4*PI)
+  /// d = length(p-pSunPosition) and then calculate i = pSunLuminousPower / (d*d*4*PI).
   /// You can use the getSunIlluminance() helper method to do exactly that.
-  utils::Property<float> pSunLuminousPower = 1.f;
+  utils::Property<float> pSunLuminousPower = 1.F;
 
-  /// Current position of the sun, realtive to the observer.
-  utils::Property<glm::dvec3> pSunPosition = glm::dvec3(0.f);
+  /// Current position of the sun, relative to the observer.
+  utils::Property<glm::dvec3> pSunPosition = glm::dvec3(0.F);
 
-  SolarSystem(std::shared_ptr<const Settings> const& settings,
-      std::shared_ptr<utils::FrameTimings> const&    frameTimings,
-      std::shared_ptr<GraphicsEngine> const&         graphicsEngine,
-      std::shared_ptr<TimeControl> const&            timeControl);
-  ~SolarSystem() = default;
+  SolarSystem(std::shared_ptr<Settings> settings, std::shared_ptr<GraphicsEngine> graphicsEngine,
+      std::shared_ptr<TimeControl> timeControl);
+
+  SolarSystem(SolarSystem const& other) = delete;
+  SolarSystem(SolarSystem&& other)      = delete;
+
+  SolarSystem& operator=(SolarSystem const& other) = delete;
+  SolarSystem& operator=(SolarSystem&& other) = delete;
+
+  ~SolarSystem();
+
+  // Illumination API ------------------------------------------------------------------------------
 
   /// The Sun which is at the center of the SolarSystem.
   std::shared_ptr<const scene::CelestialObject> getSun() const;
@@ -72,12 +69,23 @@ class CS_CORE_EXPORT SolarSystem {
   /// then i = pSunLuminousPower / (d*d*4*PI) is calculated.
   double getSunIlluminance(glm::dvec3 const& observerPosition) const;
 
+  // Object registration API -----------------------------------------------------------------------
+
   /// The CelestialObserver, which controls the camera.
   void                            setObserver(scene::CelestialObserver const& observer);
   scene::CelestialObserver&       getObserver();
   scene::CelestialObserver const& getObserver() const;
 
-  /// Adds a CelestialAnchor to the SolarSystem.
+  /// It may happen that our observer is in a SPICE frame we do not have data for. If this is the
+  /// case, this call will bring it back to Solar System Barycenter / J2000 which should be
+  /// always available. To compute the position and orientation relative to this origin we need a
+  /// simulation time at which we had valid data for the offending frame.
+  /// Usually you will not need to call this, it is automatically called by the Application if an
+  /// error occurs.
+  void fixObserverFrame(double lastWorkingSimulationTime);
+
+  /// Adds a CelestialAnchor to the SolarSystem. It's update() method will be called each frame
+  /// until you call unregisterAnchor().
   void registerAnchor(std::shared_ptr<scene::CelestialAnchor> const& anchor);
 
   /// Removes the CelestialAnchor from the SolarSystem.
@@ -88,9 +96,6 @@ class CS_CORE_EXPORT SolarSystem {
   /// A list of all CelestialAnchors in the SolarSystem.
   std::set<std::shared_ptr<scene::CelestialAnchor>> const& getAnchors() const;
 
-  /// @return The CelestialAnchor with the specified SPICE name or nullptr if it doesn't exist.
-  std::shared_ptr<scene::CelestialAnchor> getAnchor(std::string const& sCenter) const;
-
   /// Adds a CelestialBody to the SolarSystem. A call to registerAnchor() is not needed, because
   /// it is done automatically.
   void registerBody(std::shared_ptr<scene::CelestialBody> const& body);
@@ -98,8 +103,15 @@ class CS_CORE_EXPORT SolarSystem {
   /// Removes a CelestialBody from the SolarSystem. A call to unregisterAnchor() is not needed,
   /// because it is done automatically.
   void unregisterBody(std::shared_ptr<scene::CelestialBody> const& body);
+
+  /// Returns all registered bodies.
   std::set<std::shared_ptr<scene::CelestialBody>> const& getBodies() const;
-  std::shared_ptr<scene::CelestialBody>                  getBody(std::string const& sCenter) const;
+
+  /// Returns one specific body from the set above. This query ignores the case. So
+  /// getBody("Earth"), getBody("EARTH") or getBody("EaRTh") will all behave the same.
+  std::shared_ptr<scene::CelestialBody> getBody(std::string sCenter) const;
+
+  // Update methods --------------------------------------------------------------------------------
 
   /// Updates all CelestialAnchors, the Sun and the CelestialObservers animations.
   void update();
@@ -113,9 +125,13 @@ class CS_CORE_EXPORT SolarSystem {
   /// effectively with the simulation.
   /// As objects will be quite close to the observer in world space if the user is far away in
   /// *real* space, this also reduces the far clip distance in order to increase depth accuracy
-  /// for objects close to the observer. This method also manages the SPICE frame changes when the
-  /// observer moves from body to body.
+  /// for objects close to the observer.
   void updateSceneScale();
+
+  /// This method manages the SPICE frame changes when the observer moves from body to body. The
+  /// active body is determined by its weight. The weight of a body is calculated by its size and
+  /// distance to the observer.
+  void updateObserverFrame();
 
   /// Gradually moves the observer's position and rotation from their current values to the given
   /// values.
@@ -127,6 +143,16 @@ class CS_CORE_EXPORT SolarSystem {
   /// @param duration The duration in Barycentric Dynamical Time to move to the new location.
   void flyObserverTo(std::string const& sCenter, std::string const& sFrame,
       glm::dvec3 const& position, glm::dquat const& rotation, double duration);
+
+  /// Gradually moves the observer's position from its current value to the given values. The
+  /// rotation will be chosen automatically to be downward-facing.
+  ///
+  /// @param sCenter  The SPICE name of the targets center.
+  /// @param sFrame   The SPICE reference frame of the targets location.
+  /// @param position The target position in the targets coordinate system.
+  /// @param duration The duration in Barycentric Dynamical Time to move to the new location.
+  void flyObserverTo(std::string const& sCenter, std::string const& sFrame,
+      glm::dvec3 const& position, double duration);
 
   /// Gradually moves the observer's position and rotation from their current values to the values
   /// matching the geographic coordinate system coordinates given.
@@ -146,9 +172,6 @@ class CS_CORE_EXPORT SolarSystem {
   /// @param sFrame   The SPICE reference frame of the targets location.
   /// @param duration The duration in Barycentric Dynamical Time to move to the new location.
   void flyObserverTo(std::string const& sCenter, std::string const& sFrame, double duration);
-
-  /// DocTODO
-  void setObserverToCamera();
 
   /// The methods below can be used for being notified about new CelestialBodies being added to or
   /// removed from the SolarSystem.
@@ -175,19 +198,18 @@ class CS_CORE_EXPORT SolarSystem {
   /// Prints all loaded SPICE frames.
   static void printFrames();
 
-  /// Disables SPICEs error reports.
-  static void disableSpiceErrorReports();
-
-  /// Enables SPICEs error reports.
-  static void enableSpiceErrorReports();
-
   static void scaleRelativeToObserver(scene::CelestialAnchor& anchor,
       scene::CelestialObserver const& observer, double simulationTime, double baseDistance,
       double scaleFactor);
   static void turnToObserver(scene::CelestialAnchor& anchor,
       scene::CelestialObserver const& observer, double simulationTime, bool upIsNormal);
 
-  /// Gives the radii to a given SPICE object.
+  /// Gives the radii of a given SPICE object.
+  /// Mind the difference to the Settings::getRadii(): SolarSystem::getRadii() takes a SPICE center
+  /// name and makes a lookup into the loaded SPICE kernels to retrieve the radii.
+  /// Settings::getRadii() on the other hand will first check the loaded scene configuration for any
+  /// radii overides. If none is found, Settings::getRadii() will call SolarSystem::getRadii()
+  /// internally.
   /// @param sCenterName The name of the SPICE object from which the radii are requested.
   static glm::dvec3 getRadii(std::string const& sCenterName);
 
@@ -208,8 +230,7 @@ class CS_CORE_EXPORT SolarSystem {
       double dEndTime, int iSamples);
 
  private:
-  std::shared_ptr<const Settings>                   mSettings;
-  std::shared_ptr<utils::FrameTimings>              mFrameTimings;
+  std::shared_ptr<Settings>                         mSettings;
   std::shared_ptr<GraphicsEngine>                   mGraphicsEngine;
   std::shared_ptr<TimeControl>                      mTimeControl;
   scene::CelestialObserver                          mObserver;
@@ -224,6 +245,10 @@ class CS_CORE_EXPORT SolarSystem {
       mAddBodyListeners;
   std::unordered_map<uint64_t, std::function<void(std::shared_ptr<scene::CelestialBody>)>>
       mRemoveBodyListeners;
+
+  // These are used for measuring the observer speed.
+  glm::dvec3                                     mLastPosition = glm::dvec3(0.0);
+  std::chrono::high_resolution_clock::time_point mLastTime;
 };
 
 } // namespace cs::core

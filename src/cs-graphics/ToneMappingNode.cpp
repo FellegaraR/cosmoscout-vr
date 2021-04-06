@@ -6,11 +6,13 @@
 
 #include "ToneMappingNode.hpp"
 
+#include "../cs-utils/FrameTimings.hpp"
 #include "HDRBuffer.hpp"
 
 #include <VistaInterProcComm/Cluster/VistaClusterDataCollect.h>
 #include <VistaInterProcComm/Cluster/VistaClusterDataSync.h>
 #include <VistaKernel/Cluster/VistaClusterMode.h>
+#include <VistaKernel/DisplayManager/VistaDisplayManager.h>
 #include <VistaKernel/EventManager/VistaEventManager.h>
 #include <VistaKernel/EventManager/VistaSystemEvent.h>
 #include <VistaKernel/VistaFrameLoop.h>
@@ -21,6 +23,7 @@
 
 #include <glm/glm.hpp>
 #include <limits>
+#include <utility>
 
 namespace cs::graphics {
 
@@ -38,34 +41,33 @@ namespace internal {
 // Notes:
 // EV below refers to EV at ISO 100
 
-const float MIN_ISO      = 100;
-const float MAX_ISO      = 6400;
-const float MIN_SHUTTER  = 1.f / 4000.f;
-const float MAX_SHUTTER  = 1.f / 30.f;
-const float MIN_APERTURE = 1.8f;
-const float MAX_APERTURE = 22.f;
+const float MIN_ISO      = 100.F;
+const float MAX_ISO      = 6400.F;
+const float MIN_SHUTTER  = 1.F / 4000.F;
+const float MAX_SHUTTER  = 1.F / 30.F;
+const float MIN_APERTURE = 1.8F;
 
 // Given an aperture, shutter speed, and exposure value compute the required ISO value
 float ComputeISO(float aperture, float shutterSpeed, float ev) {
-  return (std::pow(aperture, 2.f) * 100.0f) / (shutterSpeed * std::pow(2.0f, ev));
+  return (std::pow(aperture, 2.F) * 100.0F) / (shutterSpeed * std::pow(2.0F, ev));
 }
 
 // Given the camera settings compute the current exposure value
 float ComputeEV(float aperture, float shutterSpeed, float iso) {
-  return std::log2((std::pow(aperture, 2.f) * 100.0f) / (shutterSpeed * iso));
+  return std::log2((std::pow(aperture, 2.F) * 100.0F) / (shutterSpeed * iso));
 }
 
 // Using the light metering equation compute the target exposure value
 float ComputeTargetEV(float luminance) {
   // K is a light meter calibration constant
-  const float K = 12.5f;
-  return std::log2(luminance * 100.0f / K);
+  const float K = 12.5F;
+  return std::log2(luminance * 100.0F / K);
 }
 
 void ApplyAperturePriority(
     float focalLength, float targetEV, float& aperture, float& shutterSpeed, float& iso) {
   // Start with the assumption that we want a shutter speed of 1/f
-  shutterSpeed = 1.0f / (focalLength * 1000.0f);
+  shutterSpeed = 1.0F / (focalLength * 1000.0F);
 
   // Compute the resulting ISO if we left the shutter speed here
   iso = glm::clamp(ComputeISO(aperture, shutterSpeed, targetEV), MIN_ISO, MAX_ISO);
@@ -74,13 +76,13 @@ void ApplyAperturePriority(
   float evDiff = targetEV - ComputeEV(aperture, shutterSpeed, iso);
 
   // Compute the final shutter speed
-  shutterSpeed = glm::clamp(shutterSpeed * std::pow(2.0f, -evDiff), MIN_SHUTTER, MAX_SHUTTER);
+  shutterSpeed = glm::clamp(shutterSpeed * std::pow(2.0F, -evDiff), MIN_SHUTTER, MAX_SHUTTER);
 }
 
 void ApplyShutterPriority(
-    float focalLength, float targetEV, float& aperture, float& shutterSpeed, float& iso) {
+    float /*unused*/, float targetEV, float& aperture, float& shutterSpeed, float& iso) {
   // Start with the assumption that we want an aperture of 4.0
-  aperture = 4.0f;
+  aperture = 4.0F;
 
   // Compute the resulting ISO if we left the aperture here
   iso = glm::clamp(ComputeISO(aperture, shutterSpeed, targetEV), MIN_ISO, MAX_ISO);
@@ -89,16 +91,16 @@ void ApplyShutterPriority(
   float evDiff = targetEV - ComputeEV(aperture, shutterSpeed, iso);
 
   // Compute the final aperture
-  aperture = glm::clamp(aperture * std::pow(std::sqrt(2.0f), evDiff), MIN_APERTURE, MIN_APERTURE);
+  aperture = glm::clamp(aperture * std::pow(std::sqrt(2.0F), evDiff), MIN_APERTURE, MIN_APERTURE);
 }
 
 void ApplyProgramAuto(
     float focalLength, float targetEV, float& aperture, float& shutterSpeed, float& iso) {
   // Start with the assumption that we want an aperture of 4.0
-  aperture = 4.0f;
+  aperture = 4.0F;
 
   // Start with the assumption that we want a shutter speed of 1/f
-  shutterSpeed = 1.0f / (focalLength * 1000.0f);
+  shutterSpeed = 1.0F / (focalLength * 1000.0F);
 
   // Compute the resulting ISO if we left both shutter and aperture here
   iso = glm::clamp(ComputeISO(aperture, shutterSpeed, targetEV), MIN_ISO, MAX_ISO);
@@ -106,11 +108,11 @@ void ApplyProgramAuto(
   // Apply half the difference in EV to the aperture
   float evDiff = targetEV - ComputeEV(aperture, shutterSpeed, iso);
   aperture =
-      glm::clamp(aperture * std::pow(std::sqrt(2.0f), evDiff * 0.5f), MIN_APERTURE, MIN_APERTURE);
+      glm::clamp(aperture * std::pow(std::sqrt(2.0F), evDiff * 0.5F), MIN_APERTURE, MIN_APERTURE);
 
   // Apply the remaining difference to the shutter speed
   evDiff       = targetEV - ComputeEV(aperture, shutterSpeed, iso);
-  shutterSpeed = glm::clamp(shutterSpeed * std::pow(2.0f, -evDiff), MIN_SHUTTER, MAX_SHUTTER);
+  shutterSpeed = glm::clamp(shutterSpeed * std::pow(2.0F, -evDiff), MIN_SHUTTER, MAX_SHUTTER);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -119,9 +121,7 @@ void ApplyProgramAuto(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-const std::string ToneMappingNode::sVertexShader = R"(
-  #version 430 compatibility
-
+static const char* sVertexShader = R"(
   out vec2 vTexcoords;
 
   void main()
@@ -133,19 +133,23 @@ const std::string ToneMappingNode::sVertexShader = R"(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-const std::string ToneMappingNode::sFragmentShader = R"(
-  #version 430 compatibility
-  
+static const char* sFragmentShader = R"(
   in vec2 vTexcoords;
 
   layout(pixel_center_integer) in vec4 gl_FragCoord;
 
-  layout(binding = 0) uniform sampler2D uDepth;
-  layout(binding = 1) uniform sampler2D uComposite;
-  layout(binding = 2) uniform sampler2D uGlowMipMap;
+  #if NUM_MULTISAMPLES > 0
+    layout (binding = 0) uniform sampler2DMS uComposite;
+    layout (binding = 1) uniform sampler2DMS uDepth;
+  #else
+    layout (binding = 0) uniform sampler2D uComposite;
+    layout (binding = 1) uniform sampler2D uDepth;
+  #endif
+
+  layout (binding = 2) uniform sampler2D uGlareMipMap;
 
   uniform float uExposure;
-  uniform float uGlowIntensity;
+  uniform float uGlareIntensity;
 
   layout(location = 0) out vec3 oColor;
 
@@ -174,6 +178,11 @@ const std::string ToneMappingNode::sFragmentShader = R"(
     return vec3(linear_to_srgb(c.r), linear_to_srgb(c.g), linear_to_srgb(c.b));
   }
 
+  // 4x4 bicubic filter using 4 bilinear texture lookups 
+  // See GPU Gems 2: "Fast Third-Order Texture Filtering", Sigg & Hadwiger:
+  // http://http.developer.nvidia.com/GPUGems2/gpugems2_chapter20.html
+
+  // w0, w1, w2, and w3 are the four cubic B-spline basis functions
   float w0(float a) {
     return (1.0 / 6.0) * (a * (a * (-a + 3.0) - 3.0) + 1.0);
   }
@@ -210,7 +219,7 @@ const std::string ToneMappingNode::sFragmentShader = R"(
 
   vec4 texture2D_bicubic(sampler2D tex, vec2 uv, int p_lod) {
     float lod = float(p_lod);
-    vec2 tex_size = textureSize(uGlowMipMap, p_lod);
+    vec2 tex_size = textureSize(uGlareMipMap, p_lod);
     vec2 pixel_size = 1.0 / tex_size;
     uv = uv * tex_size + 0.5;
     vec2 iuv = floor(uv);
@@ -229,25 +238,51 @@ const std::string ToneMappingNode::sFragmentShader = R"(
     vec2 p3 = (vec2(iuv.x + h1x, iuv.y + h1y) - 0.5) * pixel_size;
 
     return (g0(fuv.y) * (g0x * textureLod(tex, p0, lod) + g1x * textureLod(tex, p1, lod))) +
-            (g1(fuv.y) * (g0x * textureLod(tex, p2, lod) + g1x * textureLod(tex, p3, lod)));
+           (g1(fuv.y) * (g0x * textureLod(tex, p2, lod) + g1x * textureLod(tex, p3, lod)));
   }
 
   void main() {
-    vec3 color = texelFetch(uComposite, ivec2(vTexcoords * textureSize(uComposite, 0)), 0).rgb;
-
-    vec3  glow = vec3(0);
-    int maxLevels = textureQueryLevels(uGlowMipMap);
-    float weight = 1;
-
-    if (uGlowIntensity > 0) {
-      for (int i=0; i<maxLevels; ++i) {
-        glow += texture2D_bicubic(uGlowMipMap, vTexcoords, i).rgb / (i+1);
+    #if NUM_MULTISAMPLES > 0
+      vec3 color = vec3(0.0);
+      for (int i = 0; i < NUM_MULTISAMPLES; ++i) {
+        color += texelFetch(uComposite, ivec2(vTexcoords * textureSize(uComposite)), i).rgb;
       }
-      color = mix(color, glow / maxLevels, uGlowIntensity);
+      color /= NUM_MULTISAMPLES;
+
+      float depth = 1.0;
+      for (int i = 0; i < NUM_MULTISAMPLES; ++i) {
+        depth = min(depth, texelFetch(uDepth, ivec2(vTexcoords * textureSize(uDepth)), i).r);
+      }
+      gl_FragDepth = depth;
+    #else
+      vec3 color = texelFetch(uComposite, ivec2(vTexcoords * textureSize(uComposite, 0)), 0).rgb;
+      gl_FragDepth = texelFetch(uDepth, ivec2(vTexcoords * textureSize(uDepth, 0)), 0).r;
+    #endif
+
+    if (uGlareIntensity > 0) {
+      vec3  glare = vec3(0);
+      float maxLevels = textureQueryLevels(uGlareMipMap);
+
+      float totalWeight = 0;
+
+      // Each level contains a successively more blurred version of the scene. We have to
+      // accumulate them with an exponentially decreasing weight to get a proper glare distribution.
+      for (int i=0; i<maxLevels; ++i) {
+        float weight = 1.0 / pow(2, i);
+
+        #ifdef BICUBIC_GLARE_FILTER
+          glare += texture2D_bicubic(uGlareMipMap, vTexcoords, i).rgb * weight;
+        #else
+          glare += texture2D(uGlareMipMap, vTexcoords, i).rgb * weight;
+        #endif
+        
+        totalWeight += weight;
+      }
+
+      // To make sure that we do not add energy, we divide by the total weight.
+      color = mix(color, glare/totalWeight, uGlareIntensity);
     }
 
-    gl_FragDepth = texelFetch(uDepth, ivec2(vTexcoords * textureSize(uDepth, 0)), 0).r;
-    
     color = Uncharted2Tonemap(uExposure*color);
     vec3 whiteScale = vec3(1.0)/Uncharted2Tonemap(vec3(W));
     oColor = linear_to_srgb(color*whiteScale);
@@ -259,14 +294,11 @@ const std::string ToneMappingNode::sFragmentShader = R"(
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ToneMappingNode::ToneMappingNode(std::shared_ptr<HDRBuffer> const& hdrBuffer, bool drawToBackBuffer)
-    : mHDRBuffer(hdrBuffer)
-    , mDrawToBackBuffer(drawToBackBuffer)
-    , mShader(new VistaGLSLShader()) {
-  mShader->InitVertexShaderFromString(sVertexShader);
-  mShader->InitFragmentShaderFromString(sFragmentShader);
-  mShader->Link();
+ToneMappingNode::ToneMappingNode(std::shared_ptr<HDRBuffer> hdrBuffer)
+    : mHDRBuffer(std::move(hdrBuffer)) {
 
+  // Connect to the VSE_POSTGRAPHICS event. When this event is emitted, we will collect all
+  // luminance values of the connected cluster nodes.
   VistaEventManager* pEventManager = GetVistaSystem()->GetEventManager();
   pEventManager->AddEventHandler(
       this, VistaSystemEvent::GetTypeId(), VistaSystemEvent::VSE_POSTGRAPHICS);
@@ -362,33 +394,37 @@ bool ToneMappingNode::getEnableAutoExposure() const {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ToneMappingNode::setExposureMeteringMode(ExposureMeteringMode value) {
-  mExposureMeteringMode = value;
+void ToneMappingNode::setGlareIntensity(float intensity) {
+  mGlareIntensity = intensity;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-ExposureMeteringMode ToneMappingNode::getExposureMeteringMode() const {
-  return mExposureMeteringMode;
+float ToneMappingNode::getGlareIntensity() const {
+  return mGlareIntensity;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void ToneMappingNode::setGlowIntensity(float intensity) {
-  mGlowIntensity = intensity;
+void ToneMappingNode::setEnableBicubicGlareFilter(bool enable) {
+  if (mEnableBicubicGlareFilter != enable) {
+    mEnableBicubicGlareFilter = enable;
+    mShaderDirty              = true;
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-float ToneMappingNode::getGlowIntensity() const {
-  return mGlowIntensity;
+bool ToneMappingNode::getEnableBicubicGlareFilter() const {
+  return mEnableBicubicGlareFilter;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 float ToneMappingNode::getLastAverageLuminance() const {
-  if (mGlobalLuminaceData.mPixelCount > 0 && mGlobalLuminaceData.mTotalLuminance > 0) {
-    return mGlobalLuminaceData.mTotalLuminance / mGlobalLuminaceData.mPixelCount;
+  if (mGlobalLuminanceData.mPixelCount > 0 && mGlobalLuminanceData.mTotalLuminance > 0) {
+    return mGlobalLuminanceData.mTotalLuminance /
+           static_cast<float>(mGlobalLuminanceData.mPixelCount);
   }
   return 0;
 }
@@ -396,8 +432,8 @@ float ToneMappingNode::getLastAverageLuminance() const {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 float ToneMappingNode::getLastMaximumLuminance() const {
-  if (mGlobalLuminaceData.mMaximumLuminance > 0) {
-    return mGlobalLuminaceData.mMaximumLuminance;
+  if (mGlobalLuminanceData.mMaximumLuminance > 0) {
+    return mGlobalLuminanceData.mMaximumLuminance;
   }
   return 0;
 }
@@ -405,79 +441,78 @@ float ToneMappingNode::getLastMaximumLuminance() const {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool ToneMappingNode::ToneMappingNode::Do() {
-  if (mEnableAutoExposure) {
-    mHDRBuffer->calculateLuminance(mExposureMeteringMode);
 
-    // we accumulate all luminance values of this frame (can be multiple viewports
-    // and / or multiple eyes). These values will be send to the master in
-    // VSE_POSTGRAPHICS and accumulated for all clients. The result is stored in
-    // mGlobalLuminaceData and is in the next frame used for exposure calculation
+  utils::FrameTimings::ScopedTimer timer("Tonemapping");
+
+  if (mShaderDirty) {
+
+    std::string defines = "#version 430\n";
+    defines += "#define NUM_MULTISAMPLES " + std::to_string(mHDRBuffer->getMultiSamples()) + "\n";
+
+    if (mEnableBicubicGlareFilter) {
+      defines += "#define BICUBIC_GLARE_FILTER\n";
+    }
+
+    mShader = std::make_unique<VistaGLSLShader>();
+    mShader->InitVertexShaderFromString(defines + sVertexShader);
+    mShader->InitFragmentShaderFromString(defines + sFragmentShader);
+    mShader->Link();
+
+    mUniforms.exposure       = mShader->GetUniformLocation("uExposure");
+    mUniforms.glareIntensity = mShader->GetUniformLocation("uGlareIntensity");
+
+    mShaderDirty = false;
+  }
+
+  bool doCalculateExposure =
+      GetVistaSystem()->GetDisplayManager()->GetCurrentRenderInfo()->m_eEyeRenderMode !=
+      VistaDisplayManager::RenderInfo::ERM_RIGHT;
+
+  if (doCalculateExposure && mEnableAutoExposure) {
+    mHDRBuffer->calculateLuminance();
+
+    // We accumulate all luminance values of this frame (can be multiple viewports and / or multiple
+    // eyes). These values will be send to the master in VSE_POSTGRAPHICS and accumulated for all
+    // clients. The result is stored in mGlobalLuminanceData and is in the next frame used for
+    // exposure calculation
     auto size = mHDRBuffer->getCurrentViewPortSize();
-    mLocalLuminaceData.mPixelCount += size[0] * size[1];
-    mLocalLuminaceData.mTotalLuminance += mHDRBuffer->getTotalLuminance();
-    mLocalLuminaceData.mMaximumLuminance += mHDRBuffer->getMaximumLuminance();
+    mLocalLuminanceData.mPixelCount += size.at(0) * size.at(1);
+    mLocalLuminanceData.mTotalLuminance += mHDRBuffer->getTotalLuminance();
+    mLocalLuminanceData.mMaximumLuminance += mHDRBuffer->getMaximumLuminance();
 
-    // calculate exposure based on last frame's average luminance
-    // Time-dependent visual adaptation for fast realistic image display
-    // https://dl.acm.org/citation.cfm?id=344810
-    if (mGlobalLuminaceData.mPixelCount > 0 && mGlobalLuminaceData.mTotalLuminance > 0) {
-      float frameTime        = GetVistaSystem()->GetFrameLoop()->GetAverageLoopTime();
+    // Calculate exposure based on last frame's average luminance Time-dependent visual adaptation
+    // for fast realistic image display (https://dl.acm.org/citation.cfm?id=344810).
+    if (mGlobalLuminanceData.mPixelCount > 0 && mGlobalLuminanceData.mTotalLuminance > 0) {
+      auto  frameTime = static_cast<float>(GetVistaSystem()->GetFrameLoop()->GetAverageLoopTime());
       float averageLuminance = getLastAverageLuminance();
-      mAutoExposure += (std::log2(1.f / averageLuminance) - mAutoExposure) *
-                       (1.f - std::exp(-mExposureAdaptionSpeed * frameTime));
+      mAutoExposure += (std::log2(1.F / averageLuminance) - mAutoExposure) *
+                       (1.F - std::exp(-mExposureAdaptionSpeed * frameTime));
     }
   }
 
-  if (mGlowIntensity > 0) {
-    mHDRBuffer->updateGlowMipMap();
+  if (mGlareIntensity > 0) {
+    mHDRBuffer->updateGlareMipMap();
   }
-  // ---------------
 
-  // float targetEV    = internal::ComputeTargetEV(mLuminance);
-  // float focalLength = 25.f;
-  // float aperture, shutterSpeed, iso;
-  // internal::ApplyProgramAuto(focalLength, targetEV, aperture, shutterSpeed, iso);
-
-  // std::cout << "--------------------" << std::endl;
-  // std::cout << "targetEV:     " << targetEV << std::endl;
-  // std::cout << "aperture:     " << aperture << std::endl;
-  // std::cout << "shutterSpeed: 1 / " << 1.f / shutterSpeed << std::endl;
-  // std::cout << "iso:          " << iso << std::endl;
-
-  // ---------------
-
-  if (mEnableAutoExposure) {
+  if (doCalculateExposure && mEnableAutoExposure) {
     mExposure = glm::clamp(mAutoExposure, mMinAutoExposure, mMaxAutoExposure);
   }
 
-  float exposure = std::pow(2.f, mExposure + mExposureCompensation);
+  float exposure = std::pow(2.F, mExposure + mExposureCompensation);
 
   mHDRBuffer->unbind();
-  mHDRBuffer->getDepthAttachment()->Bind(GL_TEXTURE0);
-  mHDRBuffer->getCurrentWriteAttachment()->Bind(GL_TEXTURE1);
-  mHDRBuffer->getGlowMipMap()->Bind(GL_TEXTURE2);
+  mHDRBuffer->getCurrentWriteAttachment()->Bind(GL_TEXTURE0);
+  mHDRBuffer->getDepthAttachment()->Bind(GL_TEXTURE1);
+  mHDRBuffer->getGlareMipMap()->Bind(GL_TEXTURE2);
 
   glPushAttrib(GL_ENABLE_BIT | GL_DEPTH_BUFFER_BIT);
   glDisable(GL_BLEND);
   glDisable(GL_CULL_FACE);
   glEnable(GL_TEXTURE_2D);
 
-  // if we are drawing to the back-buffer, we want to
-  // disable depth testing but enable depth writing
-  // if we draw to the gbuffer we do not want to perform
-  // neither depth testing nor depth writing
-  if (mDrawToBackBuffer) {
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_ALWAYS);
-    glDepthMask(GL_TRUE);
-  } else {
-    glDisable(GL_DEPTH_TEST);
-    glDepthMask(GL_FALSE);
-  }
-
   mShader->Bind();
-  mShader->SetUniform(mShader->GetUniformLocation("uExposure"), exposure);
-  mShader->SetUniform(mShader->GetUniformLocation("uGlowIntensity"), mGlowIntensity);
+  mShader->SetUniform(mUniforms.exposure, exposure);
+  mShader->SetUniform(mUniforms.glareIntensity, mGlareIntensity);
 
   glDrawArrays(GL_TRIANGLES, 0, 3);
 
@@ -489,12 +524,12 @@ bool ToneMappingNode::ToneMappingNode::Do() {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool ToneMappingNode::GetBoundingBox(VistaBoundingBox& oBoundingBox) {
-  float min(std::numeric_limits<float>::min());
-  float max(std::numeric_limits<float>::max());
-  float fMin[3] = {min, min, min};
-  float fMax[3] = {max, max, max};
+  float      min(std::numeric_limits<float>::min());
+  float      max(std::numeric_limits<float>::max());
+  std::array fMin{min, min, min};
+  std::array fMax{max, max, max};
 
-  oBoundingBox.SetBounds(fMin, fMax);
+  oBoundingBox.SetBounds(fMin.data(), fMax.data());
 
   return true;
 }
@@ -502,40 +537,40 @@ bool ToneMappingNode::GetBoundingBox(VistaBoundingBox& oBoundingBox) {
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 void ToneMappingNode::HandleEvent(VistaEvent* pEvent) {
-  // we accumulate all luminance values of this frame (can be multiple viewports
-  // and / or multiple eyes) in mLocalLuminaceData. This will be send to the master in
-  // VSE_POSTGRAPHICS and accumulated for all clients. The result is stored in
-  // mGlobalLuminaceData and is in the next frame used for exposure calculation
+  // We accumulate all luminance values of this frame (can be multiple viewports and / or multiple
+  // eyes) in mLocalLuminanceData. This will be send to the master in VSE_POSTGRAPHICS and
+  // accumulated for all clients. The result is stored in mGlobalLuminanceData and is in the next
+  // frame used for exposure calculation.
   if (pEvent->GetId() == VistaSystemEvent::VSE_POSTGRAPHICS) {
     std::vector<std::vector<VistaType::byte>> globalData;
     std::vector<VistaType::byte>              localData(sizeof(LuminanceData));
 
-    std::memcpy(&localData[0], &mLocalLuminaceData, sizeof(LuminanceData));
+    std::memcpy(&localData[0], &mLocalLuminanceData, sizeof(LuminanceData));
     mLuminanceCollect->CollectData(&localData[0], sizeof(LuminanceData), globalData);
 
-    // globalData is only filled on the cluster master. The slaves will receive
-    // the accumulated mGlobalLuminaceData with the SyncData call below
-    mGlobalLuminaceData.mPixelCount       = 0;
-    mGlobalLuminaceData.mTotalLuminance   = 0;
-    mGlobalLuminaceData.mMaximumLuminance = 0;
+    // mGlobalLuminanceData is only filled on the cluster master. The slaves will receive the
+    // accumulated mGlobalLuminanceData with the SyncData call below
+    mGlobalLuminanceData.mPixelCount       = 0;
+    mGlobalLuminanceData.mTotalLuminance   = 0;
+    mGlobalLuminanceData.mMaximumLuminance = 0;
 
     for (auto const& data : globalData) {
       LuminanceData luminance;
       std::memcpy(&luminance, &data[0], sizeof(LuminanceData));
-      mGlobalLuminaceData.mPixelCount += luminance.mPixelCount;
-      mGlobalLuminaceData.mTotalLuminance += luminance.mTotalLuminance;
-      mGlobalLuminaceData.mMaximumLuminance =
-          std::max(mGlobalLuminaceData.mMaximumLuminance, luminance.mMaximumLuminance);
+      mGlobalLuminanceData.mPixelCount += luminance.mPixelCount;
+      mGlobalLuminanceData.mTotalLuminance += luminance.mTotalLuminance;
+      mGlobalLuminanceData.mMaximumLuminance =
+          std::max(mGlobalLuminanceData.mMaximumLuminance, luminance.mMaximumLuminance);
     }
 
-    std::memcpy(&localData[0], &mGlobalLuminaceData, sizeof(LuminanceData));
+    std::memcpy(&localData[0], &mGlobalLuminanceData, sizeof(LuminanceData));
     mLuminanceSync->SyncData(localData);
-    std::memcpy(&mGlobalLuminaceData, &localData[0], sizeof(LuminanceData));
+    std::memcpy(&mGlobalLuminanceData, &localData[0], sizeof(LuminanceData));
 
-    // reset local data for next frame
-    mLocalLuminaceData.mPixelCount       = 0;
-    mLocalLuminaceData.mTotalLuminance   = 0;
-    mLocalLuminaceData.mMaximumLuminance = 0;
+    // Reset local data for next frame.
+    mLocalLuminanceData.mPixelCount       = 0;
+    mLocalLuminanceData.mTotalLuminance   = 0;
+    mLocalLuminanceData.mMaximumLuminance = 0;
   }
 }
 

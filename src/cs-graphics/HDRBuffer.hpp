@@ -9,11 +9,10 @@
 
 #include "cs_graphics_export.hpp"
 
-#include <VistaOGLExt/VistaTexture.h>
-
 #include <array>
+#include <cstdint>
+#include <memory>
 #include <unordered_map>
-#include <vector>
 
 class VistaFramebufferObj;
 class VistaTexture;
@@ -23,90 +22,122 @@ class VistaGLSLShader;
 namespace cs::graphics {
 
 class LuminanceMipMap;
-class GlowMipMap;
+class GlareMipMap;
 
-enum class ExposureMeteringMode { AVERAGE = 0 };
-
-/**
- * Rendering with VistaDeferredPBRExport
-VistaDeferredPBR involves several required steps
- * - ClearHDRBufferNode::Do()   Should be called quite early, this will clear and bind the
-HDRBuffer.
- * - Draw opaque geometry     The HDRBuffer has several attachements your shaders are supposed to
- *                            write to:
- *                            gl_FragDepth = length(viewSpacePosition) / farClip;
- *                            layout(location = 0) out vec3 oNormal                       3x16 bit
- *                            layout(location = 1) out vec3 oAlbedo                       3x8  bit
- *                            layout(location = 2) out vec3 oEmissivity;                  3x16 bit
- *                            layout(location = 3) out vec3 oRoughnessMetalnessOcclusion; 3x8  bit
- * - HDRBufferResolveNode::Do() This will do physically based shading based on the HDRBuffer, light
- *                            information and an environment map and store the result in another
- *                            3x16 bit target
- * - Apply HDR effects        OpenGLNodes may use the HDRBuffer interface to apply effects such as
- *                            bloom or lensflares or tone-mapping. The internal render target will
- *                            be used in a ping-pong fashion. The last effect should be configured
- *                            to write to the backbuffer. HDRBuffer attachments will be bound to
- *                            texture units and can be accessed like this:
- *                            layout(binding = 0) uniform sampler2D uDepth;
- *                            layout(binding = 1) uniform sampler2D uNormal;
- *                            layout(binding = 2) uniform sampler2D uAlbedo;
- *                            layout(binding = 3) uniform sampler2D uEmissivity;
- *                            layout(binding = 4) uniform sampler2D uRoughnessMetalnessOcclusion;
- *                            layout(binding = 5) uniform sampler2D uComposite;
- */
+/// The HDRBuffer is used as render target when HDR rendering is enabled. It contains an framebuffer
+/// object for each viewport. Each framebuffer object has two color attachments containing luminance
+/// values (which can be used in a ping-pong fashion) and a depth attachment. It also contains a
+/// LuminanceMipMap to compute the average brightness for auto-exposure and a GlareMipMap for a
+/// glare-effect.
 class CS_GRAPHICS_EXPORT HDRBuffer {
  public:
-  HDRBuffer(bool highPrecision = true);
+  /// There are different possibilities for computing the glare. The simplest being a symmetrical
+  /// gauss kernel. The asymmetric gauss is perspective correct but significantly slower. In
+  /// addition, the glare quality must be set to a higher value to get acceptable results.
+  enum class GlareMode { eSymmetricGauss, eAsymmetricGauss };
+
+  /// When highPrecision is set to false, only 16bit color buffers are used.
+  explicit HDRBuffer(uint32_t multiSamples, bool highPrecision = true);
+
+  HDRBuffer(HDRBuffer const& other) = delete;
+  HDRBuffer(HDRBuffer&& other)      = delete;
+
+  HDRBuffer& operator=(HDRBuffer const& other) = delete;
+  HDRBuffer& operator=(HDRBuffer&& other) = delete;
+
   virtual ~HDRBuffer();
 
-  // Binds DEPTH and one ping-pong target for writing.
+  /// Returns the number of multi-samples used by this HDRBuffer. You should check this number
+  /// before reading from the attachments. See getDepthAttachment() and getCurrentReadAttachment()
+  /// further below.
+  uint32_t getMultiSamples() const;
+
+  /// Binds DEPTH and one ping-pong target for writing.
   void bind();
 
-  // Subsequent calls will draw to the backbuffer again.
+  /// Subsequent calls will draw to the backbuffer again.
   void unbind();
 
-  // Subsequent calls to bind() will use the ping-pong targets the other way around.
+  /// Subsequent calls to bind() will use the ping-pong targets the other way around.
   void doPingPong();
 
-  // Clears all attachements, that is DEPTH to 1.0, and HDR_0 and HDR_1 to vec3(0).
+  /// Clears all attachments, that is DEPTH to 1.0, and HDR_0 and HDR_1 to vec3(0).
   void clear();
 
-  void  calculateLuminance(ExposureMeteringMode mode);
+  /// Calculate the scene's total and maximum luminance. The results can be retrieved with
+  /// getTotalLuminance() and getMaximumLuminance().
+  void calculateLuminance();
+
+  /// Get the results of the last but one call to calculateLuminance(). The data is read back from
+  /// the GPU one frame after the computation in order to reduce synchronization requirements. In
+  /// order to get the average luminance, you have to divide getLastTotalLuminance() by
+  /// (hdrBufferWidth * hdrBufferHeight).
   float getTotalLuminance() const;
   float getMaximumLuminance() const;
 
-  void          updateGlowMipMap();
-  VistaTexture* getGlowMipMap() const;
+  /// Update and access the GlareMipMap.
+  void          updateGlareMipMap();
+  VistaTexture* getGlareMipMap() const;
+
+  /// Specifies how the glare should be computed.
+  void      setGlareMode(GlareMode value);
+  GlareMode getGlareMode() const;
+
+  /// Controls the quality of the artificial glare. For the symmetric glare a value of zero usually
+  /// results already in sufficiently smooth glares, for the asymmetric glare, at least a value of
+  /// two seems to be required for normal fields of view.
+  void     setGlareQuality(uint32_t quality);
+  uint32_t getGlareQuality() const;
+
+  /// Returns the depth attachment for the currently rendered viewport. Be aware, that this can be
+  /// texture with the target GL_TEXTURE_2D_MULTISAMPLE if getMultiSamples() > 0.
   VistaTexture* getDepthAttachment() const;
+
+  /// Returns the color attachment which is currently bound for writing for the currently rendered
+  /// viewport.
   VistaTexture* getCurrentWriteAttachment() const;
+
+  /// Returns the color attachment which is currently bound for reading for the currently rendered
+  /// viewport. Be aware, that this can be texture with the target GL_TEXTURE_2D_MULTISAMPLE if
+  /// getMultiSamples() > 0.
   VistaTexture* getCurrentReadAttachment() const;
 
-  std::array<int, 2> getCurrentViewPortSize() const;
-  std::array<int, 2> getCurrentViewPortPos() const;
+  /// Helper methods to access the size and position of the viewports we are currently rendering to.
+  static std::array<int, 2> getCurrentViewPortSize();
+  static std::array<int, 2> getCurrentViewPortPos();
 
  private:
+  // There is one of these structs for each viewport. That means, we have a separate framebuffer
+  // object, GlareMipMap and LuminanceMipMap for each viewport. This is mainly because viewports
+  // often have different sizes.
   struct HDRBufferData {
-    VistaFramebufferObj*         mFBO              = nullptr;
-    std::array<VistaTexture*, 2> mColorAttachments = {{nullptr, nullptr}};
-    VistaTexture*                mDepthAttachment  = nullptr;
-    LuminanceMipMap*             mLuminanceMipMap  = nullptr;
-    GlowMipMap*                  mGlowMipMap       = nullptr;
+    std::unique_ptr<VistaFramebufferObj>         mFBO;
+    std::array<std::unique_ptr<VistaTexture>, 2> mColorAttachments;
+    std::unique_ptr<VistaTexture>                mDepthAttachment;
+    std::unique_ptr<LuminanceMipMap>             mLuminanceMipMap;
+    std::unique_ptr<GlareMipMap>                 mGlareMipMap;
 
-    int  mCachedViewport[4];
-    int  mWidth                 = 0;
-    int  mHeight                = 0;
-    int  mCompositePinpongState = 0;
-    bool mIsBound               = false;
+    // Stores the original viewport position and size.
+    std::array<int, 4> mCachedViewport{};
+    int                mWidth                 = 0;
+    int                mHeight                = 0;
+    int                mCompositePinpongState = 0;
+    bool               mIsBound               = false;
   };
 
+  // Helper methods to retrieve the current HDRBufferData struct based on the viewport we are
+  // currently rendering to.
   HDRBufferData&       getCurrentHDRBuffer();
   HDRBufferData const& getCurrentHDRBuffer() const;
 
+  GlareMode                                         mGlareMode    = GlareMode::eSymmetricGauss;
+  uint32_t                                          mGlareQuality = 0;
   std::unordered_map<VistaViewport*, HDRBufferData> mHDRBufferData;
-  float                                             mTotalLuminance   = 1.f;
-  float                                             mMaximumLuminance = 1.f;
+  float                                             mTotalLuminance   = 1.F;
+  float                                             mMaximumLuminance = 1.F;
 
-  const float mHighPrecision;
+  const uint32_t mMultiSamples;
+  const bool     mHighPrecision;
 };
 
 } // namespace cs::graphics

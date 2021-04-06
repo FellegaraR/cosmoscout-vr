@@ -8,8 +8,7 @@
 
 #include "../cs-utils/doctest.hpp"
 
-#include <glm/glm.hpp>
-#include <json.hpp>
+#include <nlohmann/json.hpp>
 
 #include <fstream>
 
@@ -70,37 +69,56 @@ T interpolate(float key, const std::map<float, T>& map) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-} // namespace
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
-ColorMap::ColorMap(std::string const& sJsonFile)
-    : mTexture(new VistaTexture(GL_TEXTURE_1D)) {
-  ColorMapData colorMapData;
-  {
-    std::ifstream  file(sJsonFile);
-    nlohmann::json json;
-    file >> json;
-    colorMapData = json;
-  }
-
-  const int RESOLUTION = 256;
-
-  std::vector<glm::vec4> colors(RESOLUTION);
-  for (int i(0); i < colors.size(); ++i) {
-    float     key   = static_cast<float>(i) / (colors.size() - 1);
+std::vector<glm::vec4> mergeColorMapData(ColorMapData colorMapData, int resolution) {
+  std::vector<glm::vec4> colors(resolution);
+  for (size_t i(0); i < colors.size(); ++i) {
+    float     key   = static_cast<float>(i) / static_cast<float>(colors.size() - 1);
     glm::vec3 color = interpolate(key, colorMapData.rgbStops);
     float     alpha = interpolate(key, colorMapData.alphaStops);
     colors[i]       = glm::vec4(color, alpha);
   }
 
-  mTexture->UploadTexture(RESOLUTION, 1, colors.data(), false, GL_RGBA, GL_FLOAT);
+  return colors;
+}
 
-  mTexture->SetWrapS(GL_CLAMP_TO_EDGE);
-  mTexture->SetWrapT(GL_CLAMP_TO_EDGE);
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  mTexture->SetMinFilter(GL_LINEAR);
-  mTexture->SetMagFilter(GL_LINEAR);
+std::unique_ptr<VistaTexture> generateTexture(std::vector<glm::vec4> colors) {
+  std::unique_ptr<VistaTexture> texture = std::make_unique<VistaTexture>(GL_TEXTURE_1D);
+
+  texture->UploadTexture((int)colors.size(), 1, colors.data(), false, GL_RGBA, GL_FLOAT);
+
+  texture->SetWrapS(GL_CLAMP_TO_EDGE);
+  texture->SetWrapT(GL_CLAMP_TO_EDGE);
+
+  texture->SetMinFilter(GL_LINEAR);
+  texture->SetMagFilter(GL_LINEAR);
+
+  return texture;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+} // namespace
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+ColorMap::ColorMap(std::string const& sJsonString) {
+  nlohmann::json json         = nlohmann::json::parse(sJsonString);
+  ColorMapData   colorMapData = json;
+  mRawData                    = mergeColorMapData(colorMapData, mResolution);
+  mTexture                    = generateTexture(mRawData);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+ColorMap::ColorMap(boost::filesystem::path const& sJsonPath) {
+  std::ifstream  file(sJsonPath.string());
+  nlohmann::json json;
+  file >> json;
+  ColorMapData colorMapData = json;
+  mRawData                  = mergeColorMapData(colorMapData, mResolution);
+  mTexture                  = generateTexture(mRawData);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -117,11 +135,17 @@ void ColorMap::unbind(unsigned unit) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-TEST_CASE("cs::graphics::ColorMap::interpolate") {
-  std::map<float, glm::vec3> stops = {{0.f, glm::vec3(1.f, 1.f, 0.f)},
-      {0.5f, glm::vec3(1.f, 0.f, 0.f)}, {1.0f, glm::vec3(1.f, 0.f, 1.f)}};
+std::vector<glm::vec4> ColorMap::getRawData() {
+  return mRawData;
+}
 
-  CHECK(interpolate(0.f, stops) == glm::vec3(1.f, 1.f, 0.f));
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+TEST_CASE("cs::graphics::ColorMap::interpolate") {
+  std::map<float, glm::vec3> stops = {{0.F, glm::vec3(1.F, 1.F, 0.F)},
+      {0.5F, glm::vec3(1.F, 0.F, 0.F)}, {1.0F, glm::vec3(1.F, 0.F, 1.F)}};
+
+  CHECK(interpolate(0.F, stops) == glm::vec3(1.F, 1.F, 0.F));
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////

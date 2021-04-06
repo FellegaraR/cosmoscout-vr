@@ -20,6 +20,20 @@
 #include <unordered_map>
 #include <vector>
 
+/// These macros can be used to selectively disable specific gcc / clang or msvc warnings.
+#if defined(__clang__) || defined(__GNUC__)
+#define CS_DO_PRAGMA(X) _Pragma(#X)
+#define CS_WARNINGS_PUSH _Pragma("GCC diagnostic push")
+#define CS_WARNINGS_POP _Pragma("GCC diagnostic pop")
+#define CS_DISABLE_GCC_WARNING(warningName) CS_DO_PRAGMA(GCC diagnostic ignored warningName)
+#define CS_DISABLE_MSVC_WARNING(warningNumber)
+#elif defined(_MSC_VER)
+#define CS_WARNINGS_PUSH __pragma(warning(push))
+#define CS_WARNINGS_POP __pragma(warning(pop))
+#define CS_DISABLE_MSVC_WARNING(warningNumber) __pragma(warning(disable : warningNumber))
+#define CS_DISABLE_GCC_WARNING(warningName)
+#endif
+
 /// Utility functions for all sorts of stuff.
 namespace cs::utils {
 
@@ -31,6 +45,7 @@ enum class CS_UTILS_EXPORT DrawOrder : int {
   eStars            = 400,
   eAtmospheres      = 500,
   eToneMapping      = 600,
+  eOpaqueNonHDR     = 650,
   eTransparentItems = 700,
   eRay              = 800,
   eGui              = 900
@@ -102,10 +117,18 @@ constexpr typename std::underlying_type<T>::type enumCast(T val) {
 /// Well, does what is says.
 float CS_UTILS_EXPORT getCurrentFarClipDistance();
 
-double CS_UTILS_EXPORT measureTimeSeconds(std::function<void()> const& f);
+/// Executes a system command and returns the output.
+std::string exec(std::string const& cmd);
 
-void CS_UTILS_EXPORT enableGLDebug(bool onlyErrors = true);
-void CS_UTILS_EXPORT disableGLDebug();
+/// Can be used to check the operating system at compile time.
+enum class OS { eLinux, eWindows };
+
+#ifdef __linux__
+constexpr OS HostOS = OS::eLinux;
+#elif _WIN32
+constexpr OS HostOS = OS::eWindows;
+#endif
+
 } // namespace cs::utils
 
 template <int Size, typename T>

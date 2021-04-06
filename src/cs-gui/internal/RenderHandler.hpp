@@ -22,8 +22,8 @@ class RenderHandler : public CefRenderHandler {
   /// Sets what should happen, when the displayed data changes.
   void SetDrawCallback(DrawCallback const& callback);
 
-  /// Sets what happens, when the cursor icon changes.
-  void SetCursorChangeCallback(CursorChangeCallback const& callback);
+  /// The given callback is fired when the active gui element wants to receive keyboard events.
+  void SetRequestKeyboardFocusCallback(RequestKeyboardFocusCallback const& callback);
 
   void Resize(int width, int height);
   bool GetColor(int x, int y, uint8_t& r, uint8_t& g, uint8_t& b, uint8_t& a) const;
@@ -38,23 +38,21 @@ class RenderHandler : public CefRenderHandler {
   void OnPaint(CefRefPtr<CefBrowser> browser, PaintElementType type, const RectList& dirtyRects,
       const void* buffer, int width, int height) override;
 
-  /// Implements the custom cursor change handling.
-  void OnCursorChange(CefRefPtr<CefBrowser> browser, CefCursorHandle cursor,
-      CefRenderHandler::CursorType type, const CefCursorInfo& customursor_info) override;
+  void OnVirtualKeyboardRequested(CefRefPtr<CefBrowser> browser, TextInputMode input_mode) override;
 
  private:
   IMPLEMENT_REFCOUNTING(RenderHandler);
 
-  int mWidth;
-  int mHeight;
+  int mWidth{};
+  int mHeight{};
 
-  int mLastDrawWidth;
-  int mLastDrawHeight;
+  int mLastDrawWidth{};
+  int mLastDrawHeight{};
 
-  DrawCallback         mDrawCallback;
-  CursorChangeCallback mCursorChangeCallback;
+  DrawCallback                 mDrawCallback;
+  RequestKeyboardFocusCallback mRequestKeyboardFocusCallback;
 
-  uint8_t* mPixelData;
+  uint8_t* mPixelData = nullptr;
 };
 
 } // namespace cs::gui::detail

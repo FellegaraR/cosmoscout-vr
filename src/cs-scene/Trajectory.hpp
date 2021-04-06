@@ -10,14 +10,14 @@
 #include "cs_scene_export.hpp"
 
 #include <VistaKernel/GraphicsManager/VistaOpenGLDraw.h>
+#include <VistaOGLExt/VistaBufferObject.h>
+#include <VistaOGLExt/VistaGLSLShader.h>
+#include <VistaOGLExt/VistaVertexArrayObject.h>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <memory>
 #include <vector>
-
-class VistaGLSLShader;
-class VistaVertexArrayObject;
-class VistaBufferObject;
 
 namespace cs::scene {
 
@@ -32,7 +32,14 @@ namespace cs::scene {
 class CS_SCENE_EXPORT Trajectory : public IVistaOpenGLDraw {
  public:
   Trajectory();
-  ~Trajectory() override;
+
+  Trajectory(Trajectory const& other) = delete;
+  Trajectory(Trajectory&& other)      = delete;
+
+  Trajectory& operator=(Trajectory const& other) = delete;
+  Trajectory& operator=(Trajectory&& other) = delete;
+
+  ~Trajectory() override = default;
 
   /// Transforms all points by relativeTransform and uploads them to the GPU. Call this every frame
   /// in order to show the trajectory with observer centric coordinates. dTime determines the
@@ -71,22 +78,27 @@ class CS_SCENE_EXPORT Trajectory : public IVistaOpenGLDraw {
  private:
   void createShader();
 
-  VistaGLSLShader*        mShader;
-  VistaVertexArrayObject* mVAO;
-  VistaBufferObject*      mVBO;
+  std::unique_ptr<VistaGLSLShader>        mShader;
+  std::unique_ptr<VistaVertexArrayObject> mVAO;
+  std::unique_ptr<VistaBufferObject>      mVBO;
 
-  double    mMaxAge;
+  double    mMaxAge{100000.F};
   glm::vec4 mStartColor;
   glm::vec4 mEndColor;
-  float     mWidth;
+  float     mWidth{2.F};
 
   bool mShaderDirty          = true;
   bool mUseLinearDepthBuffer = false;
 
-  int mPointCount;
+  uint32_t mPointCount{0};
 
-  static const std::string SHADER_VERT;
-  static const std::string SHADER_FRAG;
+  struct {
+    uint32_t farClip          = 0;
+    uint32_t startColor       = 0;
+    uint32_t endColor         = 0;
+    uint32_t modelViewMatrix  = 0;
+    uint32_t projectionMatrix = 0;
+  } mUniforms;
 };
 } // namespace cs::scene
 

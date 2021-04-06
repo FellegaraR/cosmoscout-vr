@@ -29,17 +29,17 @@ struct CS_GUI_EXPORT KeyEvent {
   void setMods(int mods);
 
   /// PRESS, RELEASE, CHARACTER.
-  Type mType;
+  Type mType{Type::ePress};
 
   /// Bitwise or of any Modifier defined in types.hpp.
-  uint32_t mModifiers;
+  uint32_t mModifiers{};
 
   union {
     /// Only used for PRESS and RELEASE.
     Key mKey;
 
     /// Only used for CHARACTER.
-    uint16_t mCharacter;
+    uint16_t mCharacter{};
   };
 };
 

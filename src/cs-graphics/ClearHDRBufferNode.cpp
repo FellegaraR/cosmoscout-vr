@@ -10,14 +10,17 @@
 
 #include <VistaMath/VistaBoundingBox.h>
 #include <limits>
+#include <utility>
 
 namespace cs::graphics {
 
-ClearHDRBufferNode::ClearHDRBufferNode(std::shared_ptr<HDRBuffer> const& hdrBuffer)
-    : mHDRBuffer(hdrBuffer) {
+////////////////////////////////////////////////////////////////////////////////////////////////////
+
+ClearHDRBufferNode::ClearHDRBufferNode(std::shared_ptr<HDRBuffer> hdrBuffer)
+    : mHDRBuffer(std::move(hdrBuffer)) {
 }
-ClearHDRBufferNode::~ClearHDRBufferNode() {
-}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 bool ClearHDRBufferNode::ClearHDRBufferNode::Do() {
   mHDRBuffer->clear();
@@ -25,15 +28,20 @@ bool ClearHDRBufferNode::ClearHDRBufferNode::Do() {
   return true;
 }
 
-bool ClearHDRBufferNode::GetBoundingBox(VistaBoundingBox& oBoundingBox) {
-  float min(std::numeric_limits<float>::min());
-  float max(std::numeric_limits<float>::max());
-  float fMin[3] = {min, min, min};
-  float fMax[3] = {max, max, max};
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  oBoundingBox.SetBounds(fMin, fMax);
+bool ClearHDRBufferNode::GetBoundingBox(VistaBoundingBox& oBoundingBox) {
+  float min(std::numeric_limits<float>::lowest());
+  float max(std::numeric_limits<float>::max());
+
+  std::array fMin{min, min, min};
+  std::array fMax{max, max, max};
+
+  oBoundingBox.SetBounds(fMin.data(), fMax.data());
 
   return true;
 }
+
+////////////////////////////////////////////////////////////////////////////////////////////////////
 
 } // namespace cs::graphics
