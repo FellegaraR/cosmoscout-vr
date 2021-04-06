@@ -189,13 +189,6 @@ class CS_CORE_EXPORT Settings {
     // double eccentricity;
   };
 
-  /// DocTODO
-  struct BodyProperties {
-    std::optional<double>     gravity; ///< m/s^2
-    Orbit                     orbit;   ///< m
-    std::optional<Atmosphere> atmosphere;
-  };
-
   /// In order to reduce duplication of code, a list of all used SPICE-frames ("Anchors") is
   /// required at the start of each configuration file. The name of each Anchor is then later used
   /// to reference the respective SPICE frame.
@@ -224,7 +217,9 @@ class CS_CORE_EXPORT Settings {
     std::optional<double> mScale;
 
     // DocTODO
-    std::optional<BodyProperties> mProperties;
+    std::optional<double>     gravity; ///< m/s^2
+    std::optional<Orbit>      orbit;   ///< m
+    std::optional<Atmosphere> atmosphere;
 
     /// If set to false, the SolarSystem will not consider CelestialBodies created for this anchor
     /// for the computation of the active body.
@@ -535,8 +530,6 @@ class CS_CORE_EXPORT Settings {
   Graphics mGraphics;
 
   // -----------------------------------------------------------------------------------------------
-
-  std::map<std::string, BodyProperties> mBodyProperties;
 
   /// A map with configuration options for each plugin. The JSON object is not parsed, this is
   /// done by the plugins themselves.

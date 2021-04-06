@@ -90,20 +90,6 @@ void to_json(nlohmann::json& j, Settings::Orbit const& o) {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void from_json(nlohmann::json const& j, Settings::BodyProperties& o) {
-  Settings::deserialize(j, "gravity", o.gravity);
-  Settings::deserialize(j, "orbit", o.orbit);
-  Settings::deserialize(j, "atmosphere", o.atmosphere);
-}
-
-void to_json(nlohmann::json& j, Settings::BodyProperties const& o) {
-  Settings::serialize(j, "gravity", o.gravity);
-  Settings::serialize(j, "orbit", o.orbit);
-  Settings::serialize(j, "atmosphere", o.atmosphere);
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////////
-
 void from_json(nlohmann::json const& j, Settings::Anchor& o) {
   Settings::deserialize(j, "center", o.mCenter);
   Settings::deserialize(j, "frame", o.mFrame);
@@ -112,7 +98,9 @@ void from_json(nlohmann::json const& j, Settings::Anchor& o) {
   Settings::deserialize(j, "position", o.mPosition);
   Settings::deserialize(j, "rotation", o.mRotation);
   Settings::deserialize(j, "scale", o.mScale);
-  Settings::deserialize(j, "properties", o.mProperties);
+  Settings::deserialize(j, "gravity", o.gravity);
+  Settings::deserialize(j, "orbit", o.orbit);
+  Settings::deserialize(j, "atmosphere", o.atmosphere);
   Settings::deserialize(j, "trackable", o.mTrackable);
 }
 
@@ -124,7 +112,9 @@ void to_json(nlohmann::json& j, Settings::Anchor const& o) {
   Settings::serialize(j, "position", o.mPosition);
   Settings::serialize(j, "rotation", o.mRotation);
   Settings::serialize(j, "scale", o.mScale);
-  Settings::serialize(j, "properties", o.mProperties);
+  Settings::serialize(j, "gravity", o.gravity);
+  Settings::serialize(j, "orbit", o.orbit);
+  Settings::serialize(j, "atmosphere", o.atmosphere);
   Settings::serialize(j, "trackable", o.mTrackable);
 }
 
