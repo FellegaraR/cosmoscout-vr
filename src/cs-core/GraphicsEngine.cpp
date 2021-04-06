@@ -139,10 +139,10 @@ GraphicsEngine::GraphicsEngine(std::shared_ptr<core::Settings> settings)
     }
   });
 
-  for (const auto& [name, anchor] : settings->mAnchors) {
+  for (const auto& [name, anchor] : mSettings->mAnchors) {
 
     if (anchor.mProperties.has_value()) {
-      auto   radii      = settings->getAnchorRadii(name);
+      auto   radii      = mSettings->getAnchorRadii(name);
       double meanRadius = (radii[0] + radii[1] + radii[2]) / 3;
 
       auto const& props = anchor.mProperties.value();
