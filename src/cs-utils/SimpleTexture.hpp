@@ -24,11 +24,12 @@ class SimpleTexture {
   size_t const mHeight;
 
   SimpleTexture(size_t width, size_t height)
-      : mData(width * height)
-      , mWidth(width)
-      , mHeight(height){}
+      : mWidth(width)
+      , mHeight(height)
+      , mData(width * height) {
+  }
 
-            [[nodiscard]] T get(size_t x, size_t y) const {
+  [[nodiscard]] T get(size_t x, size_t y) const {
     return mData[y * mWidth + x];
   }
 
@@ -36,9 +37,12 @@ class SimpleTexture {
     mData[y * mWidth + x] = value;
   }
 
-  [[nodiscard]] T* dataPtr() { return mData.data(); }
+  [[nodiscard]] T* dataPtr() {
+    return mData.data();
+  }
 
-  private : std::vector<T> mData;
+ private:
+  std::vector<T> mData;
 };
 
 typedef SimpleTexture<int32_t>  Texture1i;

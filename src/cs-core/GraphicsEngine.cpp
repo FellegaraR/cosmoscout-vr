@@ -141,11 +141,12 @@ GraphicsEngine::GraphicsEngine(std::shared_ptr<core::Settings> settings)
 
   for (const auto& [name, anchor] : settings->mAnchors) {
 
-    if (anchor.mShadow && anchor.mShadow.value() == "eclipse") {
-      auto it = settings->mBodyProperties.find(name);
-      if (it != settings->mBodyProperties.end() && it->second.atmosphere.has_value() &&
-          it->second.gravity.has_value()) {
-        auto props = it->second;
+    if (anchor.mProperties.has_value()) {
+      auto   radii      = settings->getAnchorRadii(name);
+      double meanRadius = (radii[0] + radii[1] + radii[2]) / 3;
+
+      auto const& props = anchor.mProperties.value();
+      if (props.atmosphere.has_value() && props.gravity.has_value()) {
 
         std::vector<graphics::AtmosphereLayer> layers(props.atmosphere->layers.size());
         for (size_t i = 0; i < props.atmosphere->layers.size(); ++i) {
@@ -155,22 +156,17 @@ GraphicsEngine::GraphicsEngine(std::shared_ptr<core::Settings> settings)
               props.atmosphere->layers[i].baseDensity};
         }
 
-        mEclipseShadowCaster.emplace(
-            name, new graphics::AtmosphereEclipseShadowCaster(graphics::BodyWithAtmosphere{
-                      *props.gravity, props.meanRadius,
-                      {props.orbit.semiMajorAxisSun},
-                      {props.atmosphere->seaLevelMolecularNumberDensity,
-                          props.atmosphere->molarMass,
-                          props.atmosphere->height, layers,
-                          {props.atmosphere->sellmeierCoefficients.a,
-                           props.atmosphere->sellmeierCoefficients.terms}}}));
+        mEclipseShadowCaster.emplace(name,
+            new graphics::AtmosphereEclipseShadowCaster(graphics::BodyWithAtmosphere{*props.gravity,
+                meanRadius, {props.orbit.semiMajorAxisSun},
+                {props.atmosphere->seaLevelMolecularNumberDensity, props.atmosphere->molarMass,
+                    props.atmosphere->height, layers,
+                    {props.atmosphere->sellmeierCoefficients.a,
+                        props.atmosphere->sellmeierCoefficients.terms}}}));
 
-      } else if (it != settings->mBodyProperties.end()) {
-        auto props = it->second;
-        mEclipseShadowCaster.emplace(
-            name, new graphics::SimpleEclipseShadowCaster(
-                      graphics::Body{props.meanRadius,
-                          {props.orbit.semiMajorAxisSun}}));
+      } else {
+        mEclipseShadowCaster.emplace(name, new graphics::SimpleEclipseShadowCaster(graphics::Body{
+                                               meanRadius, {props.orbit.semiMajorAxisSun}}));
       }
     }
   }

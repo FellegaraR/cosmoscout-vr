@@ -60,7 +60,7 @@ cs::utils::Texture4f generateShadowTexture(Body const& body) {
   });
 
   std::vector<float> data(TEX_WIDTH * TEX_HEIGHT);
-  for (int i = 0; i < TEX_WIDTH * TEX_HEIGHT; ++i) {
+  for (std::size_t i = 0; i < TEX_WIDTH * TEX_HEIGHT; ++i) {
     data[i] = texture.dataPtr()[i].r;
   }
   utils::savePGM16<float>(

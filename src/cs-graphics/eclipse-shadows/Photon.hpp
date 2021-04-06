@@ -20,8 +20,8 @@ struct Photon {
   Photon(const glm::dvec3& position, const glm::dvec3& direction, double intensity,
       uint32_t wavelength)
       : position(position)
-      , direction(direction)
       , intensity(intensity)
+      , direction(direction)
       , wavelength(wavelength) {
   }
 

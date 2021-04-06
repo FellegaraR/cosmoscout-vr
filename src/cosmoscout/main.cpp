@@ -21,6 +21,7 @@
 
 #include <VistaKernel/VistaSystem.h>
 #include <doctest/doctest.h>
+#include <spdlog/sinks/sink.h>
 
 #ifdef _WIN64
 extern "C" {

@@ -43,8 +43,8 @@ std::array<std::array<double, SIZE>, SIZE> generateGaussianKernel() {
   }
 
   // normalising the Kernel
-  for (int i = 0; i < SIZE; ++i)
-    for (int j = 0; j < SIZE; ++j)
+  for (std::size_t i = 0; i < SIZE; ++i)
+    for (std::size_t j = 0; j < SIZE; ++j)
       kernel[i][j] /= sum;
 
   return kernel;
@@ -99,7 +99,7 @@ std::vector<glm::dvec4> gaussianBlur(
 
 namespace cs::graphics {
 AtmosphereEclipseTextureGenerator::AtmosphereEclipseTextureGenerator()
-    : mRNG(133713371337)// std::random_device()())
+    : mRNG(133713371337) // std::random_device()())
     , mDistributionBoolean(std::bernoulli_distribution(0.5))
     , mPhotonGenerator(std::make_unique<PhotonGenerator>())
     , mAtmosphereTracer(std::make_unique<AtmosphereTracerCPU>())
@@ -107,7 +107,6 @@ AtmosphereEclipseTextureGenerator::AtmosphereEclipseTextureGenerator()
     , mColorConverter() {
 
   // TODO remove for prod
-  utils::enableGLDebug();
   mAtmosphereTracer->init();
   mTextureTracer->init();
   mColorConverter.init();
@@ -118,7 +117,7 @@ utils::Texture4f AtmosphereEclipseTextureGenerator::createShadowMap(
   std::vector<Photon> photons = mPhotonGenerator->generatePhotons(photonCount, body);
 
   std::vector<glm::dvec3> positions(photons.size());
-  for (int i = 0; i < photons.size(); ++i) {
+  for (std::size_t i = 0; i < photons.size(); ++i) {
     positions[i] = (photons[i].position / 6371000.0) * 20.0;
   }
 
@@ -126,17 +125,9 @@ utils::Texture4f AtmosphereEclipseTextureGenerator::createShadowMap(
   double xOcc = (rOcc * (SUN_RADIUS + rOcc)) / body.orbit.semiMajorAxisSun;
   std::variant<GPUBuffer, CPUBuffer> photonBuffer;
 
-  auto atmoTime = utils::measureTimeSeconds(
-      [&] { photonBuffer = mAtmosphereTracer->traceThroughAtmosphere(photons, body, xOcc); });
+  photonBuffer = mAtmosphereTracer->traceThroughAtmosphere(photons, body, xOcc);
 
-  std::cout << "Atmosphere Time: " << atmoTime << " seconds" << std::endl;
-
-  std::vector<DoublePixel> result;
-
-  auto textureTime = utils::measureTimeSeconds(
-      [&] { result = mTextureTracer->traceThroughTexture(photonBuffer, body); });
-
-  std::cout << "   Texture Time: " << textureTime << " seconds" << std::endl;
+  auto result = mTextureTracer->traceThroughTexture(photonBuffer, body);
 
   std::vector<glm::dvec4> texture = mColorConverter.convert(result);
 
@@ -161,9 +152,6 @@ utils::Texture4f AtmosphereEclipseTextureGenerator::createShadowMap(
 
   utils::savePPM16<glm::dvec4>(resultTextureVec, TEX_WIDTH, TEX_HEIGHT,
       "eclipse_shadow_" + std::to_string(body.gravity) + ".ppm");
-
-  // TODO remove for prod
-  cs::utils::disableGLDebug();
 
   std::cout << 6 << std::endl;
 

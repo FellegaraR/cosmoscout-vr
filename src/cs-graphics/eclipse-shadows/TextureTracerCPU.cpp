@@ -43,7 +43,7 @@ std::vector<DoublePixel> TextureTracerCPU::traceThroughTexture(
   auto horizontalRectangles = std::array<glm::dvec2, TEX_WIDTH>{};
 
   double xx0 = 0.0;
-  for (int x = 0; x < TEX_WIDTH; ++x) {
+  for (uint32_t x = 0; x < TEX_WIDTH; ++x) {
     double const xx1 =
         std::pow(static_cast<double>(x + 1) / TEX_WIDTH, TEX_SHADOW_WIDTH_EXPONENT) * shadowLength;
     horizontalRectangles[x] = glm::dvec2(xx0, xx1 - xx0);
@@ -93,8 +93,9 @@ std::vector<DoublePixel> TextureTracerCPU::traceThroughTexture(
     if (localPhoton.intensity > 0.0) {
       glm::ivec2 photonTexIndices = tracer.getRectangleIdxAt(localPhoton.position);
 
-      while (photonTexIndices.x < TEX_WIDTH && photonTexIndices.y < TEX_HEIGHT &&
-             photonTexIndices.x >= 0 && photonTexIndices.y >= 0) {
+      while (photonTexIndices.x < static_cast<int32_t>(TEX_WIDTH) &&
+             photonTexIndices.y < static_cast<int32_t>(TEX_HEIGHT) && photonTexIndices.x >= 0 &&
+             photonTexIndices.y >= 0) {
         utils::geom::DRectangle rect = tracer.getRectangleAt(photonTexIndices);
 
         double const distance = utils::geom::rayDistanceInRectangle(

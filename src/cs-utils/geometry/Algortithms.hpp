@@ -230,8 +230,6 @@ std::optional<glm::tvec2<T>> intersection(
   glm::tvec2<T> v2 = line.end - line.start;
   glm::tvec2<T> v3 = glm::tvec2<T>(-ray.direction.y, ray.direction.x);
 
-  double dist = 0.0;
-
   double dot = glm::dot(v2, v3);
   if (glm::abs(dot) < 0.000001)
     return std::nullopt;

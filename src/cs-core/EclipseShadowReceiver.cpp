@@ -73,13 +73,15 @@ void EclipseShadowReceiver::setupRender(
   const glm::dmat4 planetTransform = mShadowReceiver->getWorldTransform();
   const glm::dvec3 planetPosition(modelView * planetTransform[3]);
 
-  const double sunScale          = glm::length(sunTransform[0].xyz());
-  const double sunRadiusAdjusted = static_cast<float>(sunScale * mSun->pVisibleRadius.get());
+  const double sunScale = glm::length(sunTransform[0].xyz());
+  // TODO: Use correct radii
+  const double sunRadiusAdjusted = static_cast<float>(sunScale * mSun->getRadii()[0]);
 
   shader.SetUniform(mUSunRadiusLocation, static_cast<float>(sunRadiusAdjusted));
 
-  const double scale          = glm::length(planetTransform[0].xyz());
-  const double radiusAdjusted = scale * mShadowReceiver->pVisibleRadius.get();
+  const double scale = glm::length(planetTransform[0].xyz());
+  // TODO: Use correct radii
+  const double radiusAdjusted = scale * mShadowReceiver->getRadii()[0];
   const double distToSun      = glm::length(sunPosition - planetPosition) - radiusAdjusted;
 
   mNumBodies = 0;

@@ -34,45 +34,72 @@ namespace cs::core {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void from_json(const nlohmann::json& j, Settings::SellmeierCoefficients& o) {
-  o.a     = parseProperty<double>("a", j);
-  o.terms = parseVector<std::pair<double, double>>("terms", j);
+void from_json(nlohmann::json const& j, Settings::SellmeierCoefficients& o) {
+  Settings::deserialize(j, "a", o.a);
+  Settings::deserialize(j, "terms", o.terms);
+}
+
+void to_json(nlohmann::json& j, Settings::SellmeierCoefficients const& o) {
+  Settings::serialize(j, "a", o.a);
+  Settings::serialize(j, "terms", o.terms);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void from_json(const nlohmann::json& j, Settings::AtmosphereLayer& o) {
-  o.altitude             = parseProperty<double>("altitude", j);
-  o.baseTemperature      = parseProperty<double>("baseTemperature", j);
-  o.temperatureLapseRate = parseProperty<double>("temperatureLapseRate", j);
-  o.baseDensity          = parseProperty<double>("baseDensity", j);
+void from_json(nlohmann::json const& j, Settings::AtmosphereLayer& o) {
+  Settings::deserialize(j, "altitude", o.altitude);
+  Settings::deserialize(j, "baseTemperature", o.baseTemperature);
+  Settings::deserialize(j, "temperatureLapseRate", o.temperatureLapseRate);
+  Settings::deserialize(j, "baseDensity", o.baseDensity);
+}
+
+void to_json(nlohmann::json& j, Settings::AtmosphereLayer const& o) {
+  Settings::serialize(j, "altitude", o.altitude);
+  Settings::serialize(j, "baseTemperature", o.baseTemperature);
+  Settings::serialize(j, "temperatureLapseRate", o.temperatureLapseRate);
+  Settings::serialize(j, "baseDensity", o.baseDensity);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void from_json(const nlohmann::json& j, Settings::Atmosphere& o) {
-  o.seaLevelMolecularNumberDensity = parseProperty<double>("seaLevelMolecularNumberDensity", j);
-  o.molarMass                      = parseProperty<double>("molarMass", j);
-  o.height                         = parseProperty<double>("height", j);
+void from_json(nlohmann::json const& j, Settings::Atmosphere& o) {
+  Settings::deserialize(j, "seaLevelMolecularNumberDensity", o.seaLevelMolecularNumberDensity);
+  Settings::deserialize(j, "molarMass", o.molarMass);
+  Settings::deserialize(j, "height", o.height);
+  Settings::deserialize(j, "layers", o.layers);
+  Settings::deserialize(j, "sellmeierCoefficients", o.sellmeierCoefficients);
+}
 
-  o.layers = parseVector<Settings::AtmosphereLayer>("layers", j);
-  o.sellmeierCoefficients =
-      parseSection<Settings::SellmeierCoefficients>("sellmeierCoefficients", j);
+void to_json(nlohmann::json& j, Settings::Atmosphere const& o) {
+  Settings::serialize(j, "seaLevelMolecularNumberDensity", o.seaLevelMolecularNumberDensity);
+  Settings::serialize(j, "molarMass", o.molarMass);
+  Settings::serialize(j, "height", o.height);
+  Settings::serialize(j, "layers", o.layers);
+  Settings::serialize(j, "sellmeierCoefficients", o.sellmeierCoefficients);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void from_json(const nlohmann::json& j, Settings::Orbit& o) {
-  o.semiMajorAxisSun = parseProperty<double>("semiMajorAxisSun", j);
+void from_json(nlohmann::json const& j, Settings::Orbit& o) {
+  Settings::deserialize(j, "semiMajorAxisSun", o.semiMajorAxisSun);
+}
+
+void to_json(nlohmann::json& j, Settings::Orbit const& o) {
+  Settings::serialize(j, "semiMajorAxisSun", o.semiMajorAxisSun);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-void from_json(const nlohmann::json& j, Settings::BodyProperties& o) {
-  o.gravity    = parseOptional<double>("gravity", j);
-  o.meanRadius = parseProperty<double>("meanRadius", j);
-  o.orbit      = parseSection<Settings::Orbit>("orbit", j);
-  o.atmosphere = parseOptionalSection<Settings::Atmosphere>("atmosphere", j);
+void from_json(nlohmann::json const& j, Settings::BodyProperties& o) {
+  Settings::deserialize(j, "gravity", o.gravity);
+  Settings::deserialize(j, "orbit", o.orbit);
+  Settings::deserialize(j, "atmosphere", o.atmosphere);
+}
+
+void to_json(nlohmann::json& j, Settings::BodyProperties const& o) {
+  Settings::serialize(j, "gravity", o.gravity);
+  Settings::serialize(j, "orbit", o.orbit);
+  Settings::serialize(j, "atmosphere", o.atmosphere);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
